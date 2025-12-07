@@ -166,8 +166,8 @@ export default function AppShell({ children }: AppShellProps) {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
 
-  // esconder o header apenas em landing e login
-  const hideHeader = pathname === "/landing" || pathname === "/login";
+  // CORREÇÃO AQUI  👇👇👇
+  const hideHeader = pathname === "/" || pathname === "/login" || pathname === "/landing";
 
   useEffect(() => {
     let cancelled = false;
@@ -224,7 +224,8 @@ export default function AppShell({ children }: AppShellProps) {
 
       setIsGlobalAdmin((adminRows ?? []).length > 0);
 
-      const unread = typeof unreadResult.count === "number" ? unreadResult.count : 0;
+      const unread =
+        typeof unreadResult.count === "number" ? unreadResult.count : 0;
       setUnreadCount(unread);
     }
 
@@ -260,7 +261,7 @@ export default function AppShell({ children }: AppShellProps) {
     );
   };
 
-  // se for landing ou login, NÃO mostra o menu – só o conteúdo
+  // esconder MENU em "/" (landing) e "/login"
   if (hideHeader) {
     return <>{children}</>;
   }
@@ -273,7 +274,7 @@ export default function AppShell({ children }: AppShellProps) {
       <div style={headerContainer}>
         <div style={headerInner}>
           <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
-            <Link href="/" style={brandBlock}>
+            <Link href="/anuncios" style={brandBlock}>
               <div style={brandCircle}>
                 <span style={brandLetter}>C</span>
               </div>
@@ -286,7 +287,7 @@ export default function AppShell({ children }: AppShellProps) {
             </Link>
 
             <nav style={navLinksWrapper}>
-              {renderNavLink("/", "Anúncios")}
+              {renderNavLink("/anuncios", "Anúncios")}
               {renderNavLink("/meus-anuncios", "Meus anúncios")}
               {renderNavLink("/pendentes", "Pendentes")}
               {renderNavLink("/avaliacoes", "Avaliações")}
@@ -333,7 +334,7 @@ export default function AppShell({ children }: AppShellProps) {
               )}
             </Link>
 
-            {/* admin / painel (se for global admin) */}
+            {/* admin */}
             {isGlobalAdmin && (
               <Link
                 href="/super-admin"
@@ -358,7 +359,7 @@ export default function AppShell({ children }: AppShellProps) {
               </Link>
             )}
 
-            {/* perfil – só ícone, por enquanto */}
+            {/* perfil */}
             <div style={iconCircleBase} aria-hidden="true">
               <svg
                 width="18"
@@ -401,7 +402,7 @@ export default function AppShell({ children }: AppShellProps) {
               </svg>
             </button>
 
-            {/* botão novo anúncio */}
+            {/* novo anúncio */}
             <Link href="/novo-anuncio" style={newAdButton}>
               + Novo anúncio
             </Link>

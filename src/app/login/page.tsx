@@ -40,7 +40,7 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      router.push("/");
+      router.push("/anuncios");
       return;
 
       /*
@@ -107,7 +107,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Link href="/landing" className={styles.backLink}>
+          <Link href="/" className={styles.backLink}>
             ← Ver página inicial
           </Link>
         </div>
