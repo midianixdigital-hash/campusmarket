@@ -1,6 +1,8 @@
 "use client";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 import { useEffect, useMemo, useState, FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
