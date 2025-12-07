@@ -266,7 +266,13 @@ export default function AppShell({ children }: AppShellProps) {
     return <>{children}</>;
   }
 
-  const displayName = profile?.nome || "Utilizador";
+  const displayName =
+  profile?.nome && profile.nome.trim().length > 0
+    ? profile.nome
+    : profile?.email && profile.email.trim().length > 0
+    ? profile.email
+    : "Utilizador";
+
 
   return (
     <div style={shellBackground}>
