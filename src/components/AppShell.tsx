@@ -166,18 +166,16 @@ export default function AppShell({ children }: AppShellProps) {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
 
-  // CORREÇÃO AQUI  👇👇👇
-  const hideHeader = pathname === "/" || pathname === "/login" || pathname === "/landing";
+  // esconder HEADER em landing e login
+  const hideHeader =
+    pathname === "/" || pathname === "/login" || pathname === "/landing";
 
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+    async function hydrateFromSession(session: any) {
       const user = session?.user;
+
       if (!user) {
         if (!cancelled) {
           setProfile(null);
@@ -209,17 +207,21 @@ export default function AppShell({ children }: AppShellProps) {
 
       if (cancelled) return;
 
+      const email = user.email ?? undefined;
+      const emailName =
+        typeof email === "string" ? email.split("@")[0] : null;
+
       const nome =
-        profileData?.nome ||
-        user.user_metadata?.nome ||
-        user.user_metadata?.full_name ||
-        user.email ||
+        (profileData?.nome || "").trim() ||
+        (user.user_metadata?.nome || "").trim() ||
+        (user.user_metadata?.full_name || "").trim() ||
+        emailName ||
         "Utilizador";
 
       setProfile({
         id: userId,
         nome,
-        email: user.email ?? undefined,
+        email,
       });
 
       setIsGlobalAdmin((adminRows ?? []).length > 0);
@@ -229,10 +231,25 @@ export default function AppShell({ children }: AppShellProps) {
       setUnreadCount(unread);
     }
 
-    load();
+    // sessão atual
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) {
+        hydrateFromSession(data.session);
+      }
+    });
+
+    // reagir a login / logout / refresh
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!cancelled) {
+          hydrateFromSession(session);
+        }
+      }
+    );
 
     return () => {
       cancelled = true;
+      subscription?.subscription?.unsubscribe();
     };
   }, []);
 
@@ -267,19 +284,25 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   const displayName =
-  profile?.nome && profile.nome.trim().length > 0
-    ? profile.nome
-    : profile?.email && profile.email.trim().length > 0
-    ? profile.email
-    : "Utilizador";
-
+    profile?.nome && profile.nome.trim().length > 0
+      ? profile.nome
+      : profile?.email && profile.email.trim().length > 0
+      ? profile.email
+      : "Utilizador";
 
   return (
     <div style={shellBackground}>
       {/* HEADER */}
       <div style={headerContainer}>
         <div style={headerInner}>
-          <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
             <Link href="/anuncios" style={brandBlock}>
               <div style={brandCircle}>
                 <span style={brandLetter}>C</span>
@@ -340,7 +363,7 @@ export default function AppShell({ children }: AppShellProps) {
               )}
             </Link>
 
-            {/* admin */}
+            {/* admin / painel (se for global admin) */}
             {isGlobalAdmin && (
               <Link
                 href="/super-admin"
@@ -365,8 +388,12 @@ export default function AppShell({ children }: AppShellProps) {
               </Link>
             )}
 
-            {/* perfil */}
-            <div style={iconCircleBase} aria-hidden="true">
+            {/* PERFIL – agora clicável */}
+            <Link
+              href="/perfil"
+              style={iconCircleBase}
+              title="Ver perfil"
+            >
               <svg
                 width="18"
                 height="18"
@@ -382,13 +409,16 @@ export default function AppShell({ children }: AppShellProps) {
                   strokeLinejoin="round"
                 />
               </svg>
-            </div>
+            </Link>
 
             {/* terminar sessão */}
             <button
               type="button"
               onClick={handleLogout}
-              style={{ ...iconCircleBase, borderColor: "rgba(248, 113, 113, 0.5)" }}
+              style={{
+                ...iconCircleBase,
+                borderColor: "rgba(248, 113, 113, 0.5)",
+              }}
               title="Terminar sessão"
             >
               <svg
