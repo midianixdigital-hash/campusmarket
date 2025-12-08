@@ -310,7 +310,7 @@ export default function AppShell({ children }: AppShellProps) {
               <div style={brandTextBlock}>
                 <span style={brandTitle}>CampusMarket</span>
                 <span style={brandSubtitle}>
-                  Marketplace interno para universidades
+                  Marketplace interno
                 </span>
               </div>
             </Link>

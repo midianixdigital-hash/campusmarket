@@ -392,17 +392,13 @@ export default function NovoAnuncioPage() {
   }
 
   // lista só com arquivos preenchidos (na ordem dos slots)
-  const filledFiles: File[] = files.filter(
-    (f): f is File => f !== null
-  );
+  const filledFiles: File[] = files.filter((f): f is File => f !== null);
 
   async function uploadImagens(): Promise<string[]> {
     if (filledFiles.length === 0) return [];
 
     const urls: string[] = [];
 
-    // aqui daria para comprimir imagens com alguma lib (ex.: browser-image-compression)
-    // antes de fazer o upload, mas por enquanto vamos direto.
     for (const file of filledFiles) {
       const ext = file.name.split(".").pop();
       const uniqueName =
@@ -483,8 +479,10 @@ export default function NovoAnuncioPage() {
       setDescricao("");
       setFiles(new Array(MAX_IMAGES).fill(null));
 
+      // 🔴 AQUI ERA router.push("/") – que agora é a landing.
+      // ✅ Agora manda para a área interna de anúncios:
       setTimeout(() => {
-        router.push("/");
+        router.push("/anuncios");
       }, 1000);
     } catch (err) {
       console.error(err);
