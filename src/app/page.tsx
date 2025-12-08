@@ -273,7 +273,7 @@ export default function LandingPage() {
                 O CampusMarket gera dados concretos que podem ser ligados ao
                 relatório de sustentabilidade da organização.
               </p>
-
+              <p> Menos desperdício interno, mais poupança, com segurança e métricas ESG.</p>
               <div className={styles.esgStatsGrid}>
                 <div className={styles.esgCard}>
                   <p className={styles.esgLabel}>itens desviados do lixo*</p>
@@ -294,7 +294,7 @@ export default function LandingPage() {
                   <p className={styles.esgValue}>4.7/5</p>
                 </div>
               </div>
-
+              <p> Atenção, estes valores são estimativas de referência</p>
               <p className={styles.esgFootnote}>
                 *Valores de referência baseados em comunidades entre 1.000 e
                 10.000 pessoas, com adesão média de 10–15%.
