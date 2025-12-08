@@ -233,7 +233,7 @@ export default async function AnuncioPage({
 
   return (
     <main style={pageWrapper}>
-      <Link href="/" style={backLink}>
+      <Link href="/anuncios" style={backLink}>
         ← Voltar aos anúncios
       </Link>
 
