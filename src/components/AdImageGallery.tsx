@@ -1,207 +1,188 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { supabase } from "@/lib/supabase";
 
-type Props = {
-  images: string[];
-  title?: string;
+type GalleryImage = {
+  id: string | number;
+  url: string;
 };
 
-const placeholderBox: CSSProperties = {
+const galleryWrapper: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
+const mainImageBox: CSSProperties = {
   width: "100%",
+  aspectRatio: "4 / 3",
   borderRadius: 12,
   overflow: "hidden",
-  backgroundColor: "#e5e7eb",
-  minHeight: 260,
+  backgroundColor: "#f3f4f6",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
 };
 
-const placeholderText: CSSProperties = {
-  color: "#9ca3af",
-  fontSize: 13,
-};
-
-const galleryGrid: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-  gap: 10,
-};
-
-const galleryItem: CSSProperties = {
-  position: "relative",
-  borderRadius: 12,
-  overflow: "hidden",
-  backgroundColor: "#e5e7eb",
-  aspectRatio: "4 / 3",
-  cursor: "pointer",
-};
-
-const galleryImg: CSSProperties = {
+const mainImgStyle: CSSProperties = {
   width: "100%",
   height: "100%",
   objectFit: "cover",
-  transition: "transform 0.2s ease-out",
 };
 
-const galleryBadge: CSSProperties = {
-  position: "absolute",
-  top: 6,
-  left: 6,
-  padding: "2px 8px",
-  borderRadius: 999,
-  fontSize: 11,
-  fontWeight: 600,
-  backgroundColor: "rgba(15,23,42,0.85)",
-  color: "#ffffff",
-};
-
-const overlay: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  backgroundColor: "rgba(15,23,42,0.8)",
+const thumbsRow: CSSProperties = {
   display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 40,
+  gap: 8,
+  overflowX: "auto",
 };
 
-const lightboxContent: CSSProperties = {
-  position: "relative",
-  maxWidth: "900px",
-  width: "90%",
-  maxHeight: "80vh",
-  backgroundColor: "#0f172a",
-  borderRadius: 16,
-  padding: 16,
-  boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
-  display: "flex",
-  flexDirection: "column",
-};
-
-const lightboxImgWrapper: CSSProperties = {
-  flex: 1,
-  borderRadius: 12,
+const thumbBoxBase: CSSProperties = {
+  width: 72,
+  height: 72,
+  borderRadius: 8,
   overflow: "hidden",
-  backgroundColor: "#020617",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const lightboxImg: CSSProperties = {
-  maxWidth: "100%",
-  maxHeight: "100%",
-  objectFit: "contain",
-};
-
-const closeButton: CSSProperties = {
-  position: "absolute",
-  top: 10,
-  right: 10,
-  width: 32,
-  height: 32,
-  borderRadius: 999,
-  border: "none",
-  backgroundColor: "rgba(15,23,42,0.85)",
-  color: "#e5e7eb",
+  border: "2px solid transparent",
   cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 18,
+  flexShrink: 0,
 };
 
-const navButtonBase: CSSProperties = {
-  position: "absolute",
-  top: "50%",
-  transform: "translateY(-50%)",
-  width: 40,
-  height: 40,
-  borderRadius: 999,
-  border: "none",
-  backgroundColor: "rgba(15,23,42,0.85)",
-  color: "#e5e7eb",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 20,
+const thumbImgStyle: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
 };
 
-const navButtonLeft: CSSProperties = {
-  ...navButtonBase,
-  left: 10,
-};
-
-const navButtonRight: CSSProperties = {
-  ...navButtonBase,
-  right: 10,
-};
-
-const lightboxFooter: CSSProperties = {
-  marginTop: 8,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  color: "#e5e7eb",
+const placeholderText: CSSProperties = {
   fontSize: 13,
+  color: "#6b7280",
 };
 
-export function AdImageGallery({ images, title }: Props) {
-  const [currentIndex, setCurrentIndex] = useState<number | null>(null);
+function extractImagesFromAdRecord(adRecord: any): GalleryImage[] {
+  const images: GalleryImage[] = [];
 
-  const hasImages = images && images.length > 0;
+  // 1) Campo imagem (text simples)
+  if (adRecord?.imagem && typeof adRecord.imagem === "string") {
+    const url = adRecord.imagem.trim();
+    if (url.length > 0) {
+      images.push({
+        id: `${adRecord.id}-main`,
+        url,
+      });
+    }
+  }
 
-  const openAt = (index: number) => {
-    if (!hasImages) return;
-    setCurrentIndex(index);
-  };
+  // 2) Campo imagens (jsonb: array de URLs)
+  const rawImagens = adRecord?.imagens;
 
-  const close = () => setCurrentIndex(null);
+  let imagensArray: unknown[] = [];
 
-  const goNext = (e?: MouseEvent) => {
-    e?.stopPropagation();
-    if (!hasImages || currentIndex === null) return;
-    setCurrentIndex((prev) =>
-      prev === null ? 0 : (prev + 1) % images.length
-    );
-  };
+  if (Array.isArray(rawImagens)) {
+    imagensArray = rawImagens;
+  } else if (typeof rawImagens === "string") {
+    // se por acaso o supabase devolver como string JSON
+    try {
+      const parsed = JSON.parse(rawImagens);
+      if (Array.isArray(parsed)) {
+        imagensArray = parsed;
+      }
+    } catch {
+      // ignora JSON inválido
+    }
+  }
 
-  const goPrev = (e?: MouseEvent) => {
-    e?.stopPropagation();
-    if (!hasImages || currentIndex === null) return;
-    setCurrentIndex((prev) =>
-      prev === null ? 0 : (prev - 1 + images.length) % images.length
-    );
-  };
+  imagensArray.forEach((value, index) => {
+    if (typeof value !== "string") return;
+    const url = value.trim();
+    if (!url) return;
+
+    // evita duplicar se for igual ao campo imagem
+    const already = images.some((img) => img.url === url);
+    if (already) return;
+
+    images.push({
+      id: `${adRecord.id}-arr-${index}`,
+      url,
+    });
+  });
+
+  return images;
+}
+
+export default function AdImageGallery({ adId }: { adId: number }) {
+  const [images, setImages] = useState<GalleryImage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
-    if (currentIndex === null) return;
+    const carregarImagens = async () => {
+      setLoading(true);
+      setError(null);
 
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        close();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        goNext();
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        goPrev();
+      try {
+        const { data: adRecord, error: adError } = await supabase
+          .from("anuncios")
+          .select("*")
+          .eq("id", adId)
+          .maybeSingle();
+
+        console.log("Registo do anúncio para imagens:", {
+          adId,
+          adRecord,
+          adError,
+        });
+
+        if (adError) {
+          console.error("Erro ao carregar anúncio para imagens:", adError);
+          setError("Não foi possível carregar as imagens deste anúncio.");
+          setLoading(false);
+          return;
+        }
+
+        if (!adRecord) {
+          setError("Anúncio não encontrado.");
+          setLoading(false);
+          return;
+        }
+
+        const imgs = extractImagesFromAdRecord(adRecord);
+
+        setImages(imgs);
+        setSelectedIndex(0);
+      } catch (e) {
+        console.error("Erro inesperado ao carregar imagens:", e);
+        setError("Não foi possível carregar as imagens deste anúncio.");
+      } finally {
+        setLoading(false);
       }
+    };
+
+    if (adId) {
+      void carregarImagens();
     }
+  }, [adId]);
 
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex, images.length]);
-
-  if (!hasImages) {
+  if (loading) {
     return (
-      <div style={placeholderBox}>
+      <div style={mainImageBox}>
+        <span style={placeholderText}>A carregar imagens…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={mainImageBox}>
+        <span style={placeholderText}>{error}</span>
+      </div>
+    );
+  }
+
+  if (!images.length) {
+    return (
+      <div style={mainImageBox}>
         <span style={placeholderText}>
           Este anúncio ainda não tem imagens.
         </span>
@@ -209,79 +190,47 @@ export function AdImageGallery({ images, title }: Props) {
     );
   }
 
+  const current = images[selectedIndex];
+
   return (
-    <>
-      <div style={galleryGrid}>
-        {images.map((src, index) => (
-          <button
-            key={src + index}
-            type="button"
-            style={galleryItem}
-            onClick={() => openAt(index)}
-          >
-            {index === 0 && <span style={galleryBadge}>Principal</span>}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt="" style={galleryImg} />
-          </button>
-        ))}
+    <div style={galleryWrapper}>
+      <div style={mainImageBox}>
+        {current.url ? (
+          <img
+            src={current.url}
+            alt="Imagem do anúncio"
+            style={mainImgStyle}
+          />
+        ) : (
+          <span style={placeholderText}>Imagem inválida.</span>
+        )}
       </div>
 
-      {currentIndex !== null && (
-        <div style={overlay} onClick={close}>
-          <div
-            style={lightboxContent}
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
-            <button
-              type="button"
-              style={closeButton}
-              onClick={close}
-              aria-label="Fechar"
-            >
-              ×
-            </button>
+      {images.length > 1 && (
+        <div style={thumbsRow}>
+          {images.map((img, index) => {
+            const isActive = index === selectedIndex;
 
-            {images.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  style={navButtonLeft}
-                  onClick={goPrev}
-                  aria-label="Imagem anterior"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  style={navButtonRight}
-                  onClick={goNext}
-                  aria-label="Próxima imagem"
-                >
-                  ›
-                </button>
-              </>
-            )}
-
-            <div style={lightboxImgWrapper}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={images[currentIndex]}
-                alt={title || "Imagem do anúncio"}
-                style={lightboxImg}
-              />
-            </div>
-
-            <div style={lightboxFooter}>
-              <span>{title}</span>
-              <span>
-                Imagem {currentIndex + 1} de {images.length}
-              </span>
-            </div>
-          </div>
+            return (
+              <button
+                key={img.id}
+                type="button"
+                onClick={() => setSelectedIndex(index)}
+                style={{
+                  ...thumbBoxBase,
+                  borderColor: isActive ? "#10b981" : "transparent",
+                }}
+              >
+                <img
+                  src={img.url}
+                  alt={`Imagem ${index + 1} do anúncio`}
+                  style={thumbImgStyle}
+                />
+              </button>
+            );
+          })}
         </div>
       )}
-    </>
+    </div>
   );
 }

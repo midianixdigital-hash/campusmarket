@@ -1,549 +1,460 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type VendaStatus = "disponivel" | "reservado" | "vendido";
-
-type Props = {
-  adId: number;
-  ownerId: string;
-  initialStatus: VendaStatus;
-};
-
-type BuyerOption = {
+type InterestedBuyer = {
   id: string;
-  name: string;
+  nome: string | null;
   email: string | null;
 };
 
-/** ESTILOS BÁSICOS **/
+export type VendaStatus = "disponivel" | "reservado" | "vendido" | null;
 
-const containerStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
+type Props = {
+  /** ID do anúncio (coluna anuncios.id) */
+  adId: number;
+  /** Organização do anúncio (coluna anuncios.org_id) – pode ser null */
+  orgId: number | null;
+  /** Dono do anúncio (vendedor) – id do utilizador */
+  sellerId: string;
+  /** Utilizador logado (para garantir que só o dono mexe) */
+  currentUserId: string;
+  /** Estado atual do campo anuncios.venda_status */
+  currentStatus: VendaStatus;
+  /** Callback opcional quando o status muda */
+  onStatusChanged?: (status: VendaStatus) => void;
 };
 
-const badgeBase: CSSProperties = {
-  borderRadius: 999,
-  padding: "4px 10px",
-  fontSize: 11,
-  fontWeight: 600,
-};
+export default function VendaStatusControls({
+  adId,
+  orgId,
+  sellerId,
+  currentUserId,
+  currentStatus,
+  onStatusChanged,
+}: Props) {
+  const [status, setStatus] = useState<VendaStatus>(currentStatus);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(false);
 
-const statusBadgeDisponivel: CSSProperties = {
-  ...badgeBase,
-  backgroundColor: "#dcfce7",
-  color: "#166534",
-};
-
-const statusBadgeReservado: CSSProperties = {
-  ...badgeBase,
-  backgroundColor: "#fef9c3",
-  color: "#92400e",
-};
-
-const statusBadgeVendido: CSSProperties = {
-  ...badgeBase,
-  backgroundColor: "#fee2e2",
-  color: "#b91c1c",
-};
-
-const pillButton: CSSProperties = {
-  borderRadius: 999,
-  padding: "4px 10px",
-  border: "1px solid #e5e7eb",
-  backgroundColor: "#ffffff",
-  fontSize: 11,
-  fontWeight: 500,
-  cursor: "pointer",
-};
-
-const pillButtonActive: CSSProperties = {
-  ...pillButton,
-  backgroundColor: "#047857",
-  borderColor: "#047857",
-  color: "#ffffff",
-};
-
-const tinyText: CSSProperties = {
-  fontSize: 11,
-  color: "#6b7280",
-};
-
-const modalOverlay: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  backgroundColor: "rgba(15,23,42,0.45)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 40,
-};
-
-const modalCard: CSSProperties = {
-  width: "100%",
-  maxWidth: 420,
-  backgroundColor: "#ffffff",
-  borderRadius: 16,
-  padding: 16,
-  boxShadow: "0 20px 40px rgba(15,23,42,0.35)",
-};
-
-const modalTitle: CSSProperties = {
-  fontSize: 16,
-  fontWeight: 600,
-  marginBottom: 4,
-};
-
-const modalSubtitle: CSSProperties = {
-  fontSize: 13,
-  color: "#6b7280",
-  marginBottom: 10,
-};
-
-const buyersList: CSSProperties = {
-  maxHeight: 200,
-  overflowY: "auto",
-  marginBottom: 10,
-  borderRadius: 10,
-  border: "1px solid #e5e7eb",
-  padding: 6,
-};
-
-const buyerRow: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: 6,
-  borderRadius: 8,
-  cursor: "pointer",
-};
-
-const buyerRowSelected: CSSProperties = {
-  ...buyerRow,
-  backgroundColor: "#ecfdf5",
-  border: "1px solid #bbf7d0",
-};
-
-const radioDotOuter: CSSProperties = {
-  width: 16,
-  height: 16,
-  borderRadius: "999px",
-  border: "2px solid #9ca3af",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const radioDotInner: CSSProperties = {
-  width: 8,
-  height: 8,
-  borderRadius: "999px",
-  backgroundColor: "#047857",
-};
-
-const modalButtonsRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 8,
-  marginTop: 4,
-};
-
-const ghostButton: CSSProperties = {
-  borderRadius: 999,
-  padding: "6px 12px",
-  border: "1px solid #e5e7eb",
-  backgroundColor: "#ffffff",
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: "pointer",
-};
-
-const primaryButton: CSSProperties = {
-  ...ghostButton,
-  borderColor: "#047857",
-  backgroundColor: "#047857",
-  color: "#ffffff",
-};
-
-const dangerButton: CSSProperties = {
-  ...ghostButton,
-  borderColor: "#b91c1c",
-  color: "#b91c1c",
-};
-
-const errorText: CSSProperties = {
-  fontSize: 12,
-  color: "#b91c1c",
-  marginTop: 4,
-};
-
-function getStatusBadge(status: VendaStatus) {
-  if (status === "disponivel") {
-    return <span style={statusBadgeDisponivel}>Disponível</span>;
-  }
-  if (status === "reservado") {
-    return <span style={statusBadgeReservado}>Reservado</span>;
-  }
-  return <span style={statusBadgeVendido}>Vendido</span>;
-}
-
-export function VendaStatusControls({ adId, ownerId, initialStatus }: Props) {
-  const [status, setStatus] = useState<VendaStatus>(initialStatus);
-  const [isOwner, setIsOwner] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  // modal de escolha do comprador
-  const [showModal, setShowModal] = useState(false);
-  const [buyers, setBuyers] = useState<BuyerOption[]>([]);
-  const [buyersLoading, setBuyersLoading] = useState(false);
+  const [interessados, setInteressados] = useState<InterestedBuyer[]>([]);
+  const [loadingInteressados, setLoadingInteressados] = useState(false);
+  const [interessadosError, setInteressadosError] = useState<string | null>(
+    null
+  );
   const [selectedBuyerId, setSelectedBuyerId] = useState<string | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
+  const isOwner = currentUserId === sellerId;
 
-  // Descobrir se o utilizador logado é o dono do anúncio
+  /* --------------------------------------------------
+   *  Carregar lista de interessados quando abrir modal
+   * -------------------------------------------------- */
   useEffect(() => {
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    if (!modalOpen || !isOwner) return;
 
-      if (user && user.id === ownerId) {
-        setIsOwner(true);
-      } else {
-        setIsOwner(false);
-      }
-    })();
-  }, [ownerId]);
+    async function loadInteressados() {
+      setLoadingInteressados(true);
+      setInteressadosError(null);
 
-  // Carregar potenciais compradores (quem já falou no chat desse anúncio)
-  async function loadPotentialBuyers() {
-    setBuyersLoading(true);
-    setError(null);
-
-    try {
-      const { data: msgs, error: msgsError } = await supabase
-        .from("chat_messages")
-        .select("sender_id, receiver_id")
-        .eq("ad_id", adId);
-
-      if (msgsError) {
-        console.error(msgsError);
-        setError("Não foi possível carregar os interessados.");
-        setBuyersLoading(false);
-        return;
-      }
-
-      const ids = new Set<string>();
-
-      (msgs ?? []).forEach((m: any) => {
-        if (m.sender_id && m.sender_id !== ownerId) {
-          ids.add(m.sender_id);
-        }
-        if (m.receiver_id && m.receiver_id !== ownerId) {
-          ids.add(m.receiver_id);
-        }
-      });
-
-      const uniqueIds = Array.from(ids);
-
-      if (uniqueIds.length === 0) {
-        setBuyers([]);
-        setBuyersLoading(false);
-        return;
-      }
-
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, nome, full_name, email")
-        .in("id", uniqueIds);
-
-      if (profilesError) {
-        console.error(profilesError);
-        setError("Não foi possível carregar perfis dos interessados.");
-        setBuyersLoading(false);
-        return;
-      }
-
-      const options: BuyerOption[] = (profiles ?? []).map((p: any) => ({
-        id: p.id,
-        name:
-          p.full_name ||
-          p.nome ||
-          p.email ||
-          "Pessoa sem nome configurado",
-        email: p.email ?? null,
-      }));
-
-      setBuyers(options);
-    } finally {
-      setBuyersLoading(false);
-    }
-  }
-
-  // Quando o dono do anúncio clica para mudar o status
-  async function handleChangeStatus(newStatus: VendaStatus) {
-    if (!isOwner) return;
-    setError(null);
-
-    // se apenas mudar entre disponível e reservado -> update direto
-    if (newStatus === "disponivel" || newStatus === "reservado") {
-      setLoading(true);
       try {
-        const { error: updError } = await supabase
-          .from("anuncios")
-          .update({
-            venda_status: newStatus,
-            buyer_id: null, // limpa eventual comprador
-          })
-          .eq("id", adId);
+        // Todas as mensagens sobre ESTE anúncio onde o vendedor participa
+        const { data: msgs, error: msgsError } = await supabase
+          .from("chat_messages")
+          .select("sender_id, receiver_id")
+          .eq("ad_id", adId)
+          .or(`sender_id.eq.${sellerId},receiver_id.eq.${sellerId}`);
 
-        if (updError) {
-          console.error(updError);
-          setError("Não foi possível atualizar o estado da venda.");
+        if (msgsError) throw msgsError;
+
+        const ids = new Set<string>();
+        (msgs ?? []).forEach((m: any) => {
+          if (m.sender_id && m.sender_id !== sellerId) ids.add(m.sender_id);
+          if (m.receiver_id && m.receiver_id !== sellerId)
+            ids.add(m.receiver_id);
+        });
+
+        if (ids.size === 0) {
+          setInteressados([]);
           return;
         }
 
-        setStatus(newStatus);
+        // Só usamos nome + email; nada de full_name
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, nome, email")
+          .in("id", Array.from(ids));
+
+        if (profilesError) throw profilesError;
+
+        const list: InterestedBuyer[] = (profiles ?? []).map((p: any) => ({
+          id: p.id,
+          nome: p.nome ?? null,
+          email: p.email ?? null,
+        }));
+
+        setInteressados(list);
+      } catch (err: any) {
+        console.error(err);
+        setInteressadosError(
+          "Não foi possível carregar perfis dos interessados."
+        );
       } finally {
-        setLoading(false);
+        setLoadingInteressados(false);
       }
-      return;
     }
 
-    // se escolher "vendido", abrimos o modal para escolher o comprador
-    setShowModal(true);
-    if (buyers.length === 0) {
-      await loadPotentialBuyers();
-    }
-  }
+    loadInteressados();
+  }, [modalOpen, adId, sellerId, isOwner]);
 
-  // Confirmar comprador -> marcar como vendido + criar review pendente
-  async function handleConfirmBuyer() {
-    if (!selectedBuyerId) {
-      setError("Escolhe para quem vendeste o item.");
-      return;
-    }
+  /* ------------------------
+   *  Helpers de atualização
+   * ------------------------ */
 
-    setLoading(true);
-    setError(null);
-
+  async function updateStatusInDb(newStatus: VendaStatus) {
+    setLoadingStatus(true);
     try {
-      // 1) atualizar o anúncio
-      const { error: updError } = await supabase
+      const { error } = await supabase
         .from("anuncios")
-        .update({
-          venda_status: "vendido",
-          buyer_id: selectedBuyerId,
-        })
+        .update({ venda_status: newStatus })
         .eq("id", adId);
 
-      if (updError) {
-        console.error(updError);
-        setError("Não foi possível marcar o anúncio como vendido.");
-        setLoading(false);
-        return;
-      }
+      if (error) throw error;
 
-      // 2) criar registo de review pendente para o comprador
-      const { error: reviewError } = await supabase.from("ad_reviews").insert([
-        {
-          ad_id: adId,
-          seller_id: ownerId,
-          buyer_id: selectedBuyerId,
-          status: "pending",
-        },
-      ]);
-
-      if (reviewError) {
-        console.error(reviewError);
-        // não bloqueio a venda, mas aviso
-        setError("Venda registada, mas não foi possível criar a avaliação.");
-      }
-
-      setStatus("vendido");
-      setShowModal(false);
+      setStatus(newStatus);
+      onStatusChanged?.(newStatus);
     } finally {
-      setLoading(false);
+      setLoadingStatus(false);
     }
   }
 
-  // Opção: marcar como vendido mesmo sem escolher comprador (sem avaliação)
-  async function handleMarkSoldWithoutBuyer() {
-    setLoading(true);
-    setError(null);
+  /* -----------------------------
+   *  Ações dos botões principais
+   * ----------------------------- */
 
+  async function handleSetDisponivel() {
+    if (!isOwner) return;
+    await updateStatusInDb("disponivel");
+  }
+
+  async function handleSetReservado() {
+    if (!isOwner) return;
+    await updateStatusInDb("reservado");
+  }
+
+  // Abre modal para escolher comprador
+  function handleOpenVendidaModal() {
+    if (!isOwner) return;
+    setModalOpen(true);
+  }
+
+  async function handleVendidoSemComprador() {
+    if (!isOwner) return;
+    await updateStatusInDb("vendido");
+    setModalOpen(false);
+  }
+
+  /* -----------------------------------
+   *  Confirmar comprador + criar review
+   * ----------------------------------- */
+
+  async function handleConfirmarComprador() {
+    if (!isOwner || !selectedBuyerId) return;
+
+    setLoadingStatus(true);
     try {
-      const { error: updError } = await supabase
+      // 1) Marca o anúncio como vendido
+      const { error: updErr } = await supabase
         .from("anuncios")
-        .update({
-          venda_status: "vendido",
-          buyer_id: null,
-        })
+        .update({ venda_status: "vendido" })
         .eq("id", adId);
 
-      if (updError) {
-        console.error(updError);
-        setError("Não foi possível marcar como vendido.");
-        setLoading(false);
-        return;
-      }
+      if (updErr) throw updErr;
+
+      // 2) Cria registo em ad_reviews (pendente)
+      const { error: reviewErr } = await supabase.from("ad_reviews").insert({
+        ad_id: adId,
+        org_id: orgId,
+        seller_id: sellerId,
+        buyer_id: selectedBuyerId,
+        status: "pending",
+      });
+
+      if (reviewErr) throw reviewErr;
 
       setStatus("vendido");
-      setShowModal(false);
+      onStatusChanged?.("vendido");
+      setModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert(
+        "Não foi possível registar a avaliação pendente. Verifica a tabela ad_reviews."
+      );
     } finally {
-      setLoading(false);
+      setLoadingStatus(false);
     }
   }
 
-  // Se não é o dono, mostramos só o badge de leitura
-  if (!isOwner) {
-    return (
-      <div style={containerStyle}>
-        {getStatusBadge(status)}
-      </div>
-    );
-  }
+  /* -------------
+   *  Render
+   * ------------- */
 
-  // Dono do anúncio: controlo interativo
   return (
     <>
-      <div style={containerStyle}>
-        {getStatusBadge(status)}
-
-        <span style={tinyText}>Mudar estado:</span>
-
+      {/* BOTÕES DE STATUS */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
         <button
           type="button"
-          style={
-            status === "disponivel" ? pillButtonActive : pillButton
-          }
-          onClick={() => handleChangeStatus("disponivel")}
-          disabled={loading}
+          onClick={handleSetDisponivel}
+          disabled={!isOwner || loadingStatus}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 999,
+            border:
+              status === "disponivel" ? "2px solid #16a34a" : "1px solid #e5e7eb",
+            backgroundColor: status === "disponivel" ? "#dcfce7" : "#ffffff",
+            fontSize: 12,
+            cursor: !isOwner || loadingStatus ? "default" : "pointer",
+          }}
         >
           Disponível
         </button>
+
         <button
           type="button"
-          style={
-            status === "reservado" ? pillButtonActive : pillButton
-          }
-          onClick={() => handleChangeStatus("reservado")}
-          disabled={loading}
+          onClick={handleSetReservado}
+          disabled={!isOwner || loadingStatus}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 999,
+            border:
+              status === "reservado" ? "2px solid #fb923c" : "1px solid #e5e7eb",
+            backgroundColor: status === "reservado" ? "#ffedd5" : "#ffffff",
+            fontSize: 12,
+            cursor: !isOwner || loadingStatus ? "default" : "pointer",
+          }}
         >
           Reservado
         </button>
+
         <button
           type="button"
-          style={status === "vendido" ? pillButtonActive : pillButton}
-          onClick={() => handleChangeStatus("vendido")}
-          disabled={loading}
+          onClick={handleOpenVendidaModal}
+          disabled={!isOwner || loadingStatus}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 999,
+            border:
+              status === "vendido" ? "2px solid #b91c1c" : "1px solid #e5e7eb",
+            backgroundColor: status === "vendido" ? "#fee2e2" : "#ffffff",
+            fontSize: 12,
+            cursor: !isOwner || loadingStatus ? "default" : "pointer",
+          }}
         >
-          Vendido
+          Vendi este item
         </button>
-
-        {loading && (
-          <span style={tinyText}>A guardar…</span>
-        )}
-
-        {error && (
-          <span style={errorText}>{error}</span>
-        )}
       </div>
 
-      {showModal && (
-        <div style={modalOverlay}>
-          <div style={modalCard}>
-            <h3 style={modalTitle}>Para quem vendeste este item?</h3>
-            <p style={modalSubtitle}>
-              Escolhe a pessoa que efetivamente comprou. Isso vai criar uma
+      {/* MODAL DE ESCOLHA DO COMPRADOR */}
+      {modalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(15,23,42,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              backgroundColor: "#ffffff",
+              borderRadius: 16,
+              padding: 20,
+              boxShadow: "0 20px 60px rgba(15,23,42,0.35)",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 18,
+                fontWeight: 600,
+                marginBottom: 4,
+              }}
+            >
+              Para quem vendeste este item?
+            </h2>
+            <p
+              style={{
+                fontSize: 13,
+                color: "#4b5563",
+                marginBottom: 10,
+              }}
+            >
+              Escolhe a pessoa com quem fechaste o negócio. Vamos criar uma
               avaliação pendente apenas para essa pessoa, na página
-              &quot;Avaliações&quot;.
+              &nbsp;<strong>“Avaliações”</strong>.
             </p>
 
-            {buyersLoading ? (
-              <p style={tinyText}>A carregar interessados…</p>
-            ) : buyers.length === 0 ? (
-              <p style={tinyText}>
-                Ainda não encontrei ninguém nas conversas deste anúncio.
+            {interessadosError && (
+              <p
+                style={{
+                  backgroundColor: "#fee2e2",
+                  color: "#b91c1c",
+                  fontSize: 13,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  marginBottom: 8,
+                }}
+              >
+                {interessadosError}
+              </p>
+            )}
+
+            {loadingInteressados ? (
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "#6b7280",
+                  marginTop: 8,
+                }}
+              >
+                A carregar perfis dos interessados…
+              </p>
+            ) : interessados.length === 0 ? (
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "#6b7280",
+                  marginTop: 8,
+                }}
+              >
+                Ainda não encontrámos ninguém nas conversas deste anúncio.
                 Podes marcar como vendido sem avaliação, se quiseres.
               </p>
             ) : (
-              <div style={buyersList}>
-                {buyers.map((b) => {
-                  const selected = b.id === selectedBuyerId;
+              <div
+                style={{
+                  marginTop: 8,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  borderRadius: 12,
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                {interessados.map((p) => {
+                  const isSelected = selectedBuyerId === p.id;
                   return (
-                    <div
-                      key={b.id}
-                      style={selected ? buyerRowSelected : buyerRow}
-                      onClick={() => setSelectedBuyerId(b.id)}
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedBuyerId(p.id)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "10px 12px",
+                        border: "none",
+                        borderBottom: "1px solid #e5e7eb",
+                        backgroundColor: isSelected ? "#ecfdf5" : "#ffffff",
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
                     >
-                      <div style={radioDotOuter}>
-                        {selected && <div style={radioDotInner} />}
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          marginBottom: 2,
+                          color: "#111827",
+                        }}
+                      >
+                        {p.nome || p.email || "Utilizador"}
                       </div>
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "#111827",
-                          }}
-                        >
-                          {b.name}
+                      {p.email && (
+                        <div style={{ fontSize: 12, color: "#6b7280" }}>
+                          {p.email}
                         </div>
-                        {b.email && (
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "#6b7280",
-                            }}
-                          >
-                            {b.email}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                      )}
+                    </button>
                   );
                 })}
               </div>
             )}
 
-            {error && <p style={errorText}>{error}</p>}
-
-            <div style={modalButtonsRow}>
+            <div
+              style={{
+                marginTop: 14,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 type="button"
-                style={ghostButton}
-                onClick={() => {
-                  setShowModal(false);
-                  setError(null);
-                  setSelectedBuyerId(null);
+                onClick={() => setModalOpen(false)}
+                disabled={loadingStatus}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  padding: "8px 10px",
+                  borderRadius: 999,
+                  border: "1px solid #e5e7eb",
+                  backgroundColor: "#ffffff",
+                  fontSize: 13,
+                  cursor: loadingStatus ? "default" : "pointer",
                 }}
-                disabled={loading}
               >
                 Cancelar
               </button>
 
               <button
                 type="button"
-                style={dangerButton}
-                onClick={handleMarkSoldWithoutBuyer}
-                disabled={loading}
+                onClick={handleVendidoSemComprador}
+                disabled={loadingStatus}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  padding: "8px 10px",
+                  borderRadius: 999,
+                  border: "none",
+                  backgroundColor: "#f97316",
+                  color: "#ffffff",
+                  fontSize: 13,
+                  cursor: loadingStatus ? "default" : "pointer",
+                }}
               >
-                Vendido sem comprador
+                Vendi sem comprador
               </button>
 
               <button
                 type="button"
-                style={primaryButton}
-                onClick={handleConfirmBuyer}
-                disabled={loading || buyersLoading || buyers.length === 0}
+                onClick={handleConfirmarComprador}
+                disabled={!selectedBuyerId || loadingStatus}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  padding: "8px 10px",
+                  borderRadius: 999,
+                  border: "none",
+                  backgroundImage:
+                    "linear-gradient(90deg, #16a34a, #22c55e)",
+                  color: "#ffffff",
+                  fontSize: 13,
+                  cursor:
+                    !selectedBuyerId || loadingStatus ? "default" : "pointer",
+                }}
               >
-                {loading ? "A guardar…" : "Confirmar comprador"}
+                Confirmar comprador
               </button>
             </div>
           </div>

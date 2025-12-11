@@ -7,8 +7,6 @@ import { useEffect, useMemo, useState, FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-
-
 type MessageRow = {
   id: number;
   ad_id: number;
@@ -94,6 +92,10 @@ export default function MensagensPage() {
 
       setCurrentUserId(user.id);
 
+      // parâmetros vindos do StartChatButton (adId & with)
+      const adIdParam = searchParams.get("adId");
+      const withParam = searchParams.get("with");
+
       // Todas as mensagens onde este user é sender OU receiver
       const { data: msgsData, error: msgsError } = await supabase
         .from("chat_messages")
@@ -113,7 +115,7 @@ export default function MensagensPage() {
 
       const msgs = (msgsData ?? []) as MessageRow[];
 
-      // IDs de anúncios e outros utilizadores
+      // IDs de anúncios e outros utilizadores extraídos das mensagens
       const adIds = new Set<number>();
       const otherUserIds = new Set<string>();
 
@@ -123,7 +125,9 @@ export default function MensagensPage() {
         if (otherId) otherUserIds.add(otherId);
       }
 
-      // Fetch anúncios
+      // -------------------------------------------------
+      //  Fetch anúncios (para todos os adIds que têm mensagens)
+      // -------------------------------------------------
       let adsMap: Record<number, AdMeta> = {};
       if (adIds.size > 0) {
         const { data: adsData, error: adsError } = await supabase
@@ -145,7 +149,32 @@ export default function MensagensPage() {
         }
       }
 
-      // Fetch perfis
+      // 👉 garantir meta também para o anúncio vindo do StartChatButton,
+      // mesmo que ainda não haja mensagens
+      if (adIdParam) {
+        const adIdNum = Number(adIdParam);
+        if (!Number.isNaN(adIdNum) && !adsMap[adIdNum]) {
+          const { data: singleAd, error: singleAdError } = await supabase
+            .from("anuncios")
+            .select("id, titulo, preco")
+            .eq("id", adIdNum)
+            .maybeSingle();
+
+          if (singleAdError) {
+            console.error(singleAdError);
+          } else if (singleAd) {
+            adsMap[singleAd.id] = {
+              id: singleAd.id,
+              titulo: singleAd.titulo ?? null,
+              preco: singleAd.preco ?? null,
+            };
+          }
+        }
+      }
+
+      // -------------------------------------------------
+      //  Fetch perfis (para todos os outros utilizadores com mensagens)
+      // -------------------------------------------------
       let usersMap: Record<string, UserMeta> = {};
       if (otherUserIds.size > 0) {
         const { data: usersData, error: usersError } = await supabase
@@ -167,10 +196,31 @@ export default function MensagensPage() {
         }
       }
 
+      // 👉 garantir meta também para o utilizador vindo do StartChatButton
+      if (withParam && withParam !== user.id && !usersMap[withParam]) {
+        const { data: singleUser, error: singleUserError } = await supabase
+          .from("profiles")
+          .select("id, nome, email")
+          .eq("id", withParam)
+          .maybeSingle();
+
+        if (singleUserError) {
+          console.error(singleUserError);
+        } else if (singleUser) {
+          usersMap[singleUser.id] = {
+            id: singleUser.id,
+            nome: singleUser.nome ?? null,
+            email: singleUser.email ?? null,
+          };
+        }
+      }
+
       setAds(adsMap);
       setUsers(usersMap);
 
-      // Construir mapa de conversas a partir das mensagens
+      // -------------------------------------------------
+      //  Construir mapa de conversas a partir das mensagens
+      // -------------------------------------------------
       const convMap = new Map<string, Conversation>();
 
       for (const m of msgs) {
@@ -200,9 +250,10 @@ export default function MensagensPage() {
         }
       }
 
-      // Ver se veio da StartChatButton com adId & with
-      const adIdParam = searchParams.get("adId");
-      const withParam = searchParams.get("with");
+      // -------------------------------------------------
+      //  Ver se veio da StartChatButton com adId & with
+      //  (cria conversa "placeholder" se ainda não existe)
+      // -------------------------------------------------
       let defaultSelected: string | null = null;
 
       if (adIdParam && withParam && withParam !== user.id) {
@@ -212,7 +263,6 @@ export default function MensagensPage() {
           defaultSelected = key;
 
           if (!convMap.has(key)) {
-            // conversa ainda não existe -> criar "placeholder"
             convMap.set(key, {
               key,
               adId: adIdNum,

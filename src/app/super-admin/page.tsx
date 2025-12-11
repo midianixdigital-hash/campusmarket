@@ -67,25 +67,29 @@ const wrapperStyle: CSSProperties = {
   maxWidth: 1180,
   margin: "24px auto",
   padding: "16px",
+  borderRadius: 20,
+  background:
+    "linear-gradient(135deg, #eff6ff 0%, #fdf2ff 35%, #ecfdf5 100%)",
 };
 
 const titleStyle: CSSProperties = {
-  fontSize: 22,
+  fontSize: 24,
   fontWeight: 700,
   marginBottom: 4,
 };
 
 const subtitleStyle: CSSProperties = {
   fontSize: 14,
-  color: "#6b7280",
+  color: "#4b5563",
   marginBottom: 16,
 };
 
 const cardStyle: CSSProperties = {
   backgroundColor: "#ffffff",
-  borderRadius: 12,
+  borderRadius: 14,
   padding: 16,
-  boxShadow: "0 1px 6px rgba(15,23,42,0.08)",
+  boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
+  border: "1px solid #e5e7eb",
 };
 
 const cardTitleStyle: CSSProperties = {
@@ -101,11 +105,12 @@ const labelStyle: CSSProperties = {
 
 const inputStyle: CSSProperties = {
   width: "100%",
-  padding: "6px 8px",
-  borderRadius: 6,
+  padding: "7px 9px",
+  borderRadius: 8,
   border: "1px solid #d1d5db",
   fontSize: 12,
   boxSizing: "border-box" as const,
+  backgroundColor: "#ffffff",
 };
 
 const selectStyle: CSSProperties = {
@@ -133,11 +138,11 @@ const fieldStyle: CSSProperties = {
 const buttonRow: CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
-  marginTop: 8,
+  marginTop: 10,
 };
 
 const primaryButton: CSSProperties = {
-  padding: "8px 14px",
+  padding: "8px 16px",
   borderRadius: 999,
   border: "none",
   backgroundColor: "#111827",
@@ -154,7 +159,7 @@ const primaryButtonDisabled: CSSProperties = {
 };
 
 const secondaryButton: CSSProperties = {
-  padding: "4px 10px",
+  padding: "5px 10px",
   borderRadius: 999,
   border: "1px solid #d1d5db",
   backgroundColor: "#f9fafb",
@@ -249,18 +254,19 @@ const statusBadgeInactive: CSSProperties = {
 
 const chip: CSSProperties = {
   display: "inline-block",
-  padding: "2px 6px",
+  padding: "3px 8px",
   borderRadius: 999,
   backgroundColor: "#f3f4f6",
   fontSize: 11,
   color: "#4b5563",
   marginRight: 4,
-  marginBottom: 2,
+  marginBottom: 4,
 };
 
 const chipStrong: CSSProperties = {
   ...chip,
   fontWeight: 600,
+  backgroundColor: "#e5e7eb",
 };
 
 const chipsRow: CSSProperties = {
@@ -269,7 +275,7 @@ const chipsRow: CSSProperties = {
   gap: 4,
 };
 
-// NOVOS STYLES PARA MÓDULOS
+// MÓDULOS
 const modulesRowStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
@@ -552,7 +558,7 @@ export default function SuperAdminPage() {
     );
   }
 
-  // NOVO: toggle de módulos no estado
+  // toggle de módulos no estado
   function toggleOrgModule(orgId: number, field: keyof OrganizationRow) {
     setOrganizations((prev) =>
       prev.map((o) =>
@@ -717,13 +723,15 @@ export default function SuperAdminPage() {
   const totalAdmins = orgMembers.filter((m) => m.role === "admin").length;
   const totalBlocked = orgMembers.filter((m) => m.is_blocked).length;
 
-  // para a tabela de cima ainda uso organization_stats
-  const selectedStatsUsers = selectedStats?.total_users ?? 0;
+  const statsUsers = selectedStats?.total_users ?? 0;
+  const statsAds = selectedStats?.total_ads ?? 0;
+  const statsAdsVendidos = selectedStats?.ads_vendidos ?? 0;
 
   const contractedUsers =
     selectedOrg?.contract_seats ?? selectedStats?.contract_seats ?? null;
 
-  // para a barra uso a lista real de membros carregados
+  // na barra usamos o número de membros carregados (associações) –
+  // que pode ser diferente da estatística total_users, dependendo de como a view é calculada
   const currentUsersForBar = orgMembers.length;
   const progress =
     contractedUsers && contractedUsers > 0
@@ -826,7 +834,7 @@ export default function SuperAdminPage() {
                           >
                             {org.name ?? "(sem nome)"}
                           </button>
-                          <div style={{ ...chipsRow }}>
+                          <div style={chipsRow}>
                             {org.slug && (
                               <span style={chip}>
                                 slug: <strong>{org.slug}</strong>
@@ -1023,12 +1031,21 @@ export default function SuperAdminPage() {
                 )}
               </p>
 
+              {/* Resumo rápido – aqui aparecem aqueles "4 utilizadores", "12 anúncios"… */}
+              <div style={{ ...chipsRow, marginTop: 6 }}>
+                <span style={chipStrong}>{statsUsers} utilizadores</span>
+                <span style={chip}>{statsAds} anúncios</span>
+                {statsAdsVendidos > 0 && (
+                  <span style={chip}>{statsAdsVendidos} vendidos</span>
+                )}
+              </div>
+
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                   gap: 10,
-                  marginTop: 12,
+                  marginTop: 14,
                 }}
               >
                 <div style={fieldStyle}>
@@ -1119,7 +1136,7 @@ export default function SuperAdminPage() {
                 </div>
               </div>
 
-              {/* BARRA DE PROGRESSO */}
+              {/* BARRA DE PROGRESSO – usa o nº de membros carregados */}
               <div style={{ marginTop: 12 }}>
                 <label style={{ ...labelStyle, display: "block" }}>
                   Utilização de utilizadores
@@ -1146,8 +1163,8 @@ export default function SuperAdminPage() {
                 </div>
                 <p style={{ ...smallText, marginTop: 4 }}>
                   {contractedUsers
-                    ? `${currentUsersForBar} / ${contractedUsers} utilizadores`
-                    : `${currentUsersForBar} utilizadores (nenhum limite de contrato definido)`}
+                    ? `${currentUsersForBar} utilizadores associados nesta lista / ${contractedUsers} contratados`
+                    : `${currentUsersForBar} utilizadores associados (nenhum limite de contrato definido)`}
                 </p>
               </div>
 
@@ -1308,9 +1325,16 @@ export default function SuperAdminPage() {
                 }}
               >
                 <p style={smallText}>
-                  Total: <strong>{orgMembers.length}</strong> · Admins:{" "}
+                  Total na lista: <strong>{orgMembers.length}</strong> · Admins:{" "}
                   <strong>{totalAdmins}</strong> · Bloqueados:{" "}
                   <strong>{totalBlocked}</strong>
+                  {statsUsers > 0 && (
+                    <>
+                      {" "}
+                      · Estatística:{" "}
+                      <strong>{statsUsers} utilizadores</strong>
+                    </>
+                  )}
                 </p>
                 <input
                   type="text"

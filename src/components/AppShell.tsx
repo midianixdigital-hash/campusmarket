@@ -165,6 +165,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
+  const [isOrgAdmin, setIsOrgAdmin] = useState(false);
 
   // esconder HEADER em landing e login
   const hideHeader =
@@ -181,13 +182,14 @@ export default function AppShell({ children }: AppShellProps) {
           setProfile(null);
           setUnreadCount(0);
           setIsGlobalAdmin(false);
+          setIsOrgAdmin(false);
         }
         return;
       }
 
       const userId = user.id;
 
-      const [{ data: profileData }, { data: adminRows }, unreadResult] =
+      const [{ data: profileData }, { data: adminRows }, unreadResult, { data: orgAdminRows }] =
         await Promise.all([
           supabase
             .from("profiles")
@@ -203,6 +205,11 @@ export default function AppShell({ children }: AppShellProps) {
             .select("id", { head: true, count: "exact" })
             .eq("receiver_id", userId)
             .eq("is_read", false),
+          supabase
+            .from("user_organizations")
+            .select("role")
+            .eq("user_id", userId)
+            .eq("role", "admin"),
         ]);
 
       if (cancelled) return;
@@ -225,6 +232,7 @@ export default function AppShell({ children }: AppShellProps) {
       });
 
       setIsGlobalAdmin((adminRows ?? []).length > 0);
+      setIsOrgAdmin((orgAdminRows ?? []).length > 0);
 
       const unread =
         typeof unreadResult.count === "number" ? unreadResult.count : 0;
@@ -290,6 +298,8 @@ export default function AppShell({ children }: AppShellProps) {
       ? profile.email
       : "Utilizador";
 
+  const canSeeReports = isGlobalAdmin || isOrgAdmin;
+
   return (
     <div style={shellBackground}>
       {/* HEADER */}
@@ -309,9 +319,7 @@ export default function AppShell({ children }: AppShellProps) {
               </div>
               <div style={brandTextBlock}>
                 <span style={brandTitle}>CampusMarket</span>
-                <span style={brandSubtitle}>
-                  Marketplace interno
-                </span>
+                <span style={brandSubtitle}>Marketplace interno</span>
               </div>
             </Link>
 
@@ -320,7 +328,7 @@ export default function AppShell({ children }: AppShellProps) {
               {renderNavLink("/meus-anuncios", "Meus anúncios")}
               {renderNavLink("/pendentes", "Pendentes")}
               {renderNavLink("/avaliacoes", "Avaliações")}
-              {renderNavLink("/relatorios", "Relatórios")}
+              {canSeeReports && renderNavLink("/relatorios", "Relatórios")}
             </nav>
           </div>
 
@@ -388,12 +396,8 @@ export default function AppShell({ children }: AppShellProps) {
               </Link>
             )}
 
-            {/* PERFIL – agora clicável */}
-            <Link
-              href="/perfil"
-              style={iconCircleBase}
-              title="Ver perfil"
-            >
+            {/* PERFIL */}
+            <Link href="/perfil" style={iconCircleBase} title="Ver perfil">
               <svg
                 width="18"
                 height="18"
