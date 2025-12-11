@@ -1,75 +1,62 @@
 "use client";
 
-import type { CSSProperties, FormEvent, ChangeEvent } from "react";
+import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-/** TYPES **/
-
 type OrganizationRow = {
   id: number;
-  name?: string | null;
-  tipo?: string | null;
-  slug?: string | null;
-  created_at?: string | null;
-
-  is_active?: boolean | null;
-
-  // MÓDULOS
-  module_esg_premium?: boolean | null;
-
-  contract_type?: string | null;
-  contract_start?: string | null;
-  contract_end?: string | null;
-  contract_value?: number | null;
-  contract_currency?: string | null;
-  contract_seats?: number | null; // utilizadores contratados
-  contact_name?: string | null;
-  contact_email?: string | null;
-  contact_phone?: string | null;
-  contract_notes?: string | null;
-
-  [key: string]: any;
-};
-
-type OrganizationStatsRow = {
-  org_id: number;
   name: string | null;
   tipo: string | null;
   slug: string | null;
   is_active: boolean | null;
+  contract_type: string | null;
+  contract_start: string | null;
+  contract_end: string | null;
+  contract_value: number | null;
+  contract_currency: string | null;
   contract_seats: number | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+};
 
+type OrganizationStatsRow = {
+  org_id: number;
   total_users: number;
   total_ads: number;
   ads_vendidos: number;
+  contract_seats: number | null;
+};
+
+type OrgWithStats = {
+  org: OrganizationRow;
+  stats: OrganizationStatsRow | null;
 };
 
 type MemberProfile = {
   id: string;
-  nome?: string | null;
-  contacto?: string | null;
-  email?: string | null;
+  nome: string | null;
+  email: string | null;
+  contacto: string | null;
 };
 
-type OrgMemberRow = {
+type OrgMember = {
   user_id: string;
   organization_id: number;
-  role?: string | null;
-  is_blocked?: boolean | null;
-  profile?: MemberProfile | null;
+  role: string | null;
+  is_blocked: boolean | null;
+  profile: MemberProfile | null;
 };
 
-/** STYLES **/
-
-const wrapperStyle: CSSProperties = {
-  maxWidth: 1180,
+const pageWrapper: CSSProperties = {
+  maxWidth: 1200,
   margin: "24px auto",
   padding: "16px",
   borderRadius: 20,
   background:
-    "linear-gradient(135deg, #eff6ff 0%, #fdf2ff 35%, #ecfdf5 100%)",
+    "linear-gradient(135deg, #eff6ff 0%, #fdf2ff 30%, #ecfdf5 100%)",
 };
 
 const titleStyle: CSSProperties = {
@@ -81,46 +68,28 @@ const titleStyle: CSSProperties = {
 const subtitleStyle: CSSProperties = {
   fontSize: 14,
   color: "#4b5563",
-  marginBottom: 16,
+  marginBottom: 20,
 };
 
-const cardStyle: CSSProperties = {
+const layoutGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 2fr)",
+  gap: 16,
+  alignItems: "flex-start",
+};
+
+const cardBase: CSSProperties = {
   backgroundColor: "#ffffff",
-  borderRadius: 14,
+  borderRadius: 16,
   padding: 16,
-  boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.08)",
   border: "1px solid #e5e7eb",
 };
 
-const cardTitleStyle: CSSProperties = {
+const cardTitle: CSSProperties = {
   fontSize: 16,
   fontWeight: 600,
-  marginBottom: 8,
-};
-
-const labelStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 500,
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  padding: "7px 9px",
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  fontSize: 12,
-  boxSizing: "border-box" as const,
-  backgroundColor: "#ffffff",
-};
-
-const selectStyle: CSSProperties = {
-  ...inputStyle,
-};
-
-const textareaStyle: CSSProperties = {
-  ...inputStyle,
-  minHeight: 60,
-  resize: "vertical" as const,
+  marginBottom: 10,
 };
 
 const smallText: CSSProperties = {
@@ -128,56 +97,151 @@ const smallText: CSSProperties = {
   color: "#6b7280",
 };
 
-const fieldStyle: CSSProperties = {
+const orgList: CSSProperties = {
+  maxHeight: 520,
+  overflowY: "auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+const orgCardBase: CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid #e5e7eb",
+  padding: 10,
+  backgroundColor: "#f9fafb",
+  cursor: "pointer",
   display: "flex",
   flexDirection: "column",
   gap: 4,
-  marginBottom: 10,
 };
 
-const buttonRow: CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  marginTop: 10,
+const orgCardSelected: CSSProperties = {
+  ...orgCardBase,
+  borderColor: "#0f766e",
+  backgroundColor: "#ecfdf5",
 };
 
-const primaryButton: CSSProperties = {
-  padding: "8px 16px",
+const badge: CSSProperties = {
+  display: "inline-block",
+  padding: "2px 8px",
   borderRadius: 999,
-  border: "none",
-  backgroundColor: "#111827",
-  color: "#ffffff",
-  fontSize: 14,
+  fontSize: 11,
+  backgroundColor: "#f3f4f6",
+  color: "#4b5563",
+  marginRight: 4,
+  marginBottom: 2,
+};
+
+const badgeStrong: CSSProperties = {
+  ...badge,
+  backgroundColor: "#e5e7eb",
   fontWeight: 600,
-  cursor: "pointer",
 };
 
-const primaryButtonDisabled: CSSProperties = {
-  ...primaryButton,
-  opacity: 0.6,
-  cursor: "default",
+const statusActive: CSSProperties = {
+  ...badgeStrong,
+  backgroundColor: "#dcfce7",
+  color: "#166534",
 };
 
-const secondaryButton: CSSProperties = {
-  padding: "5px 10px",
+const statusInactive: CSSProperties = {
+  ...badgeStrong,
+  backgroundColor: "#fee2e2",
+  color: "#b91c1c",
+};
+
+const metricsRow: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+  marginTop: 8,
+};
+
+const metricCard: CSSProperties = {
+  flex: "1 1 120px",
+  minWidth: 0,
+  borderRadius: 12,
+  padding: "8px 10px",
+  backgroundColor: "#f9fafb",
+  border: "1px solid #e5e7eb",
+};
+
+const metricLabel: CSSProperties = {
+  fontSize: 11,
+  color: "#6b7280",
+};
+
+const metricValue: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 700,
+  color: "#111827",
+};
+
+const fieldGrid: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 10,
+  marginTop: 12,
+};
+
+const fieldLabel: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 500,
+};
+
+const fieldValueBox: CSSProperties = {
+  marginTop: 4,
+  fontSize: 13,
+  color: "#111827",
+};
+
+const tableWrapper: CSSProperties = {
+  maxHeight: 340,
+  overflowY: "auto",
+};
+
+const miniTable: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 13,
+};
+
+const miniTh: CSSProperties = {
+  textAlign: "left",
+  padding: "6px 4px",
+  borderBottom: "1px solid #e5e7eb",
+  fontWeight: 600,
+};
+
+const miniTd: CSSProperties = {
+  padding: "4px 4px",
+  borderBottom: "1px solid #f3f4f6",
+  verticalAlign: "middle",
+};
+
+const selectStyle: CSSProperties = {
+  fontSize: 12,
+  padding: "4px 6px",
+  borderRadius: 999,
+  border: "1px solid #d1d5db",
+  backgroundColor: "#ffffff",
+};
+
+const pillButton: CSSProperties = {
+  padding: "4px 10px",
   borderRadius: 999,
   border: "1px solid #d1d5db",
   backgroundColor: "#f9fafb",
-  color: "#111827",
   fontSize: 11,
-  fontWeight: 500,
   cursor: "pointer",
 };
 
-const subtleButton: CSSProperties = {
-  padding: "4px 8px",
-  borderRadius: 999,
-  border: "none",
-  backgroundColor: "transparent",
-  color: "#4b5563",
-  fontSize: 11,
-  fontWeight: 500,
-  cursor: "pointer",
+const pillButtonDanger: CSSProperties = {
+  ...pillButton,
+  borderColor: "#fecaca",
+  backgroundColor: "#fef2f2",
+  color: "#b91c1c",
 };
 
 const errorText: CSSProperties = {
@@ -186,154 +250,22 @@ const errorText: CSSProperties = {
   marginTop: 8,
 };
 
-const successText: CSSProperties = {
-  fontSize: 13,
-  color: "#16a34a",
-  marginTop: 8,
-};
-
-const tableWrapper: CSSProperties = {
-  width: "100%",
-  overflowX: "auto",
-};
-
-const tableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: 12,
-};
-
-const thStyle: CSSProperties = {
-  textAlign: "left",
-  padding: "8px 6px",
-  borderBottom: "1px solid #e5e7eb",
-  backgroundColor: "#f9fafb",
-  fontWeight: 600,
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: CSSProperties = {
-  padding: "6px 6px",
-  borderBottom: "1px solid #f3f4f6",
-  verticalAlign: "middle",
-};
-
-const miniTableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: 12,
-};
-
-const miniThStyle: CSSProperties = {
-  textAlign: "left",
-  padding: "6px 4px",
-  borderBottom: "1px solid #e5e7eb",
-  fontWeight: 600,
-};
-
-const miniTdStyle: CSSProperties = {
-  padding: "4px 4px",
-  borderBottom: "1px solid #f3f4f6",
-  verticalAlign: "middle",
-};
-
-const statusBadgeActive: CSSProperties = {
-  display: "inline-block",
-  padding: "2px 8px",
-  borderRadius: 999,
-  fontSize: 11,
-  backgroundColor: "#dcfce7",
-  color: "#166534",
-};
-
-const statusBadgeInactive: CSSProperties = {
-  ...statusBadgeActive,
-  backgroundColor: "#fee2e2",
-  color: "#b91c1c",
-};
-
-const chip: CSSProperties = {
-  display: "inline-block",
-  padding: "3px 8px",
-  borderRadius: 999,
-  backgroundColor: "#f3f4f6",
-  fontSize: 11,
-  color: "#4b5563",
-  marginRight: 4,
-  marginBottom: 4,
-};
-
-const chipStrong: CSSProperties = {
-  ...chip,
-  fontWeight: 600,
-  backgroundColor: "#e5e7eb",
-};
-
-const chipsRow: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 4,
-};
-
-// MÓDULOS
-const modulesRowStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 8,
-  marginTop: 6,
-};
-
-const modulePillBase: CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: 999,
-  border: "1px solid #d1d5db",
-  fontSize: 11,
-  cursor: "pointer",
-  backgroundColor: "#f9fafb",
-  color: "#6b7280",
-};
-
-const modulePillActive: CSSProperties = {
-  ...modulePillBase,
-  borderColor: "#047857",
-  backgroundColor: "#ecfdf5",
-  color: "#047857",
-  fontWeight: 600,
-};
-
-/** COMPONENTE **/
-
-export default function SuperAdminPage() {
+export default function SuperAdminOrganizationsPage() {
   const router = useRouter();
 
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const [organizations, setOrganizations] = useState<OrganizationRow[]>([]);
-  const [orgStats, setOrgStats] = useState<OrganizationStatsRow[]>([]);
-
+  const [orgs, setOrgs] = useState<OrgWithStats[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
 
-  const [orgMembers, setOrgMembers] = useState<OrgMemberRow[]>([]);
+  const [members, setMembers] = useState<OrgMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
-  const [memberSearch, setMemberSearch] = useState("");
-  const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
 
-  const [orgNome, setOrgNome] = useState("");
-  const [orgTipo, setOrgTipo] = useState<"universidade" | "empresa">(
-    "universidade"
-  );
-  const [orgSlug, setOrgSlug] = useState("");
-
-  const [loadingOrgs, setLoadingOrgs] = useState(true);
-  const [creatingOrg, setCreatingOrg] = useState(false);
-  const [savingOrgId, setSavingOrgId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  /** AUTH + GLOBAL ADMIN **/
-
+  // AUTH + verifica se é global_admin
   useEffect(() => {
     (async () => {
       const {
@@ -348,11 +280,11 @@ export default function SuperAdminPage() {
         return;
       }
 
-      setCurrentUserEmail(user.email ?? null);
+      setUserEmail(user.email ?? null);
 
       const { data: adminRow, error: adminError } = await supabase
         .from("global_admins")
-        .select("*")
+        .select("user_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -363,57 +295,74 @@ export default function SuperAdminPage() {
     })();
   }, [router]);
 
-  /** CARREGAR ORGANIZAÇÕES / STATS **/
-
+  // carrega organizações + stats
   useEffect(() => {
     if (!authChecked || !isGlobalAdmin) return;
 
-    async function loadData() {
-      setLoadingOrgs(true);
-      setError(null);
-      setSuccess(null);
-
-      const { data: orgs, error: orgError } = await supabase
-        .from("organizations")
-        .select("*")
-        .order("created_at", { ascending: false });
+    (async () => {
+      const [{ data: orgRows, error: orgError }, { data: statRows, error: statsError }] =
+        await Promise.all([
+          supabase.from("organizations").select("*").order("name", { ascending: true }),
+          supabase.from("organization_stats").select("*"),
+        ]);
 
       if (orgError) {
         console.error(orgError);
         setError("Não foi possível carregar as organizações.");
-      } else {
-        setOrganizations((orgs ?? []) as OrganizationRow[]);
+        return;
       }
+      if (statsError) console.error(statsError);
 
-      const { data: stats, error: statsError } = await supabase
-        .from("organization_stats")
-        .select("*");
+      const statsMap = new Map<number, OrganizationStatsRow>();
+      (statRows ?? []).forEach((s: any) => {
+        statsMap.set(s.org_id, {
+          org_id: s.org_id,
+          total_users: s.total_users ?? 0,
+          total_ads: s.total_ads ?? 0,
+          ads_vendidos: s.ads_vendidos ?? 0,
+          contract_seats: s.contract_seats ?? null,
+        });
+      });
 
-      if (statsError) {
-        console.error(statsError);
-      } else {
-        setOrgStats((stats ?? []) as OrganizationStatsRow[]);
+      const merged: OrgWithStats[] = (orgRows ?? []).map((o: any) => ({
+        org: {
+          id: o.id,
+          name: o.name ?? null,
+          tipo: o.tipo ?? null,
+          slug: o.slug ?? null,
+          is_active: o.is_active ?? true,
+          contract_type: o.contract_type ?? null,
+          contract_start: o.contract_start ?? null,
+          contract_end: o.contract_end ?? null,
+          contract_value: o.contract_value ?? null,
+          contract_currency: o.contract_currency ?? null,
+          contract_seats: o.contract_seats ?? null,
+          contact_name: o.contact_name ?? null,
+          contact_email: o.contact_email ?? null,
+          contact_phone: o.contact_phone ?? null,
+        },
+        stats: statsMap.get(o.id) ?? null,
+      }));
+
+      setOrgs(merged);
+      if (merged.length > 0 && !selectedOrgId) {
+        setSelectedOrgId(merged[0].org.id);
       }
+    })();
+  }, [authChecked, isGlobalAdmin, selectedOrgId]);
 
-      setLoadingOrgs(false);
-    }
-
-    loadData();
-  }, [authChecked, isGlobalAdmin]);
-
-  /** CARREGAR UTILIZADORES DA ORG (user_organizations + profiles) **/
-
+  // carrega utilizadores da org selecionada
   useEffect(() => {
     if (!selectedOrgId) {
-      setOrgMembers([]);
+      setMembers([]);
       return;
     }
 
-    async function loadMembers() {
+    (async () => {
       setMembersLoading(true);
       setError(null);
 
-      const { data: members, error } = await supabase
+      const { data: memberRows, error } = await supabase
         .from("user_organizations")
         .select("user_id, organization_id, role, is_blocked")
         .eq("organization_id", selectedOrgId)
@@ -421,23 +370,23 @@ export default function SuperAdminPage() {
 
       if (error) {
         console.error(error);
-        setError("Não foi possível carregar os utilizadores da organização.");
+        setError("Não foi possível carregar os utilizadores.");
         setMembersLoading(false);
         return;
       }
 
-      if (!members || members.length === 0) {
-        setOrgMembers([]);
+      if (!memberRows || memberRows.length === 0) {
+        setMembers([]);
         setMembersLoading(false);
         return;
       }
 
-      const typedMembers = members as OrgMemberRow[];
-      const userIds = typedMembers.map((m) => m.user_id);
+      const typed = memberRows as any as OrgMember[];
+      const userIds = typed.map((m) => m.user_id);
 
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, nome, contacto, email")
+        .select("id, nome, email, contacto")
         .in("id", userIds);
 
       if (profilesError) console.error(profilesError);
@@ -446,982 +395,354 @@ export default function SuperAdminPage() {
       (profiles ?? []).forEach((p: any) => {
         profileMap.set(p.id, {
           id: p.id,
-          nome: p.nome,
-          contacto: p.contacto,
-          email: p.email,
+          nome: p.nome ?? null,
+          email: p.email ?? null,
+          contacto: p.contacto ?? null,
         });
       });
 
-      const withProfiles: OrgMemberRow[] = typedMembers.map((m) => ({
+      const mergedMembers: OrgMember[] = typed.map((m) => ({
         ...m,
         profile: profileMap.get(m.user_id) ?? null,
       }));
 
-      setOrgMembers(withProfiles);
+      setMembers(mergedMembers);
       setMembersLoading(false);
-    }
-
-    loadMembers();
+    })();
   }, [selectedOrgId]);
 
-  /** HELPERS **/
-
-  function gerarSlugBase(nome: string) {
-    return nome
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  }
-
-  async function handleCreateOrg(e: FormEvent) {
-    e.preventDefault();
+  async function updateMemberRole(member: OrgMember, role: string) {
     setError(null);
-    setSuccess(null);
-
-    if (!orgNome.trim() || !orgSlug.trim()) {
-      setError("Nome e slug são obrigatórios.");
-      return;
-    }
-
-    setCreatingOrg(true);
-
-    try {
-      const slugLimpo = orgSlug.trim().toLowerCase();
-
-      const { error: insertError } = await supabase
-        .from("organizations")
-        .insert([
-          {
-            name: orgNome.trim(),
-            tipo: orgTipo,
-            slug: slugLimpo,
-            is_active: true,
-          },
-        ]);
-
-      if (insertError) {
-        console.error(insertError);
-        setError("Não foi possível criar a organização.");
-        setCreatingOrg(false);
-        return;
-      }
-
-      setSuccess("Organização criada com sucesso.");
-      setOrgNome("");
-      setOrgSlug("");
-
-      const { data: orgsReload } = await supabase
-        .from("organizations")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (orgsReload) {
-        setOrganizations(orgsReload as OrganizationRow[]);
-      }
-
-      const { data: statsReload } = await supabase
-        .from("organization_stats")
-        .select("*");
-      if (statsReload) {
-        setOrgStats(statsReload as OrganizationStatsRow[]);
-      }
-    } finally {
-      setCreatingOrg(false);
-    }
-  }
-
-  function handleOrgFieldChange(
-    orgId: number,
-    field: keyof OrganizationRow,
-    value: string
-  ) {
-    setOrganizations((prev) =>
-      prev.map((o) =>
-        o.id === orgId
-          ? {
-              ...o,
-              [field]:
-                field === "contract_value"
-                  ? value === ""
-                    ? null
-                    : Number(value.replace(",", "."))
-                  : field === "contract_seats"
-                  ? value === ""
-                    ? null
-                    : Number(value)
-                  : value,
-            }
-          : o
-      )
-    );
-  }
-
-  // toggle de módulos no estado
-  function toggleOrgModule(orgId: number, field: keyof OrganizationRow) {
-    setOrganizations((prev) =>
-      prev.map((o) =>
-        o.id === orgId
-          ? {
-              ...o,
-              [field]: !(o as any)[field],
-            }
-          : o
-      )
-    );
-  }
-
-  async function handleSaveOrg(org: OrganizationRow) {
-    setError(null);
-    setSuccess(null);
-    setSavingOrgId(org.id);
-
-    try {
-      const payload = {
-        tipo: org.tipo ?? null,
-        is_active: org.is_active ?? true,
-
-        // MÓDULOS
-        module_esg_premium: org.module_esg_premium ?? false,
-
-        contract_type: org.contract_type ?? null,
-        contract_start: org.contract_start ?? null,
-        contract_end: org.contract_end ?? null,
-        contract_value: org.contract_value ?? null,
-        contract_currency: org.contract_currency ?? null,
-        contract_seats: org.contract_seats ?? null,
-        contact_name: org.contact_name ?? null,
-        contact_email: org.contact_email ?? null,
-        contact_phone: org.contact_phone ?? null,
-        contract_notes: org.contract_notes ?? null,
-      };
-
-      const { error } = await supabase
-        .from("organizations")
-        .update(payload)
-        .eq("id", org.id);
-
-      if (error) {
-        console.error(error);
-        setError("Não foi possível guardar as alterações.");
-        return;
-      }
-
-      setSuccess("Alterações guardadas.");
-      const { data: statsReload } = await supabase
-        .from("organization_stats")
-        .select("*");
-      if (statsReload) {
-        setOrgStats(statsReload as OrganizationStatsRow[]);
-      }
-    } finally {
-      setSavingOrgId(null);
-    }
-  }
-
-  async function toggleOrgActive(org: OrganizationRow) {
-    const newValue = !org.is_active;
     const { error } = await supabase
-      .from("organizations")
-      .update({ is_active: newValue })
-      .eq("id", org.id);
+      .from("user_organizations")
+      .update({ role })
+      .eq("user_id", member.user_id)
+      .eq("organization_id", member.organization_id);
 
     if (error) {
       console.error(error);
-      setError("Não foi possível atualizar o estado da organização.");
+      setError("Não foi possível atualizar o perfil do utilizador.");
       return;
     }
 
-    setOrganizations((prev) =>
-      prev.map((o) => (o.id === org.id ? { ...o, is_active: newValue } : o))
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === member.user_id ? { ...m, role } : m
+      )
     );
   }
 
-  async function handleMemberRoleChange(member: OrgMemberRow, role: string) {
-    setError(null);
-    setUpdatingMemberId(member.user_id);
-
-    try {
-      const { error } = await supabase
-        .from("user_organizations")
-        .update({ role })
-        .eq("user_id", member.user_id)
-        .eq("organization_id", selectedOrgId);
-
-      if (error) {
-        console.error(error);
-        setError("Não foi possível atualizar o perfil do utilizador.");
-        return;
-      }
-
-      setOrgMembers((prev) =>
-        prev.map((m) =>
-          m.user_id === member.user_id ? { ...m, role } : m
-        )
-      );
-    } finally {
-      setUpdatingMemberId(null);
-    }
-  }
-
-  async function toggleMemberBlocked(member: OrgMemberRow) {
+  async function toggleMemberBlocked(member: OrgMember) {
     setError(null);
     const newValue = !member.is_blocked;
-    setUpdatingMemberId(member.user_id);
 
-    try {
-      const { error } = await supabase
-        .from("user_organizations")
-        .update({ is_blocked: newValue })
-        .eq("user_id", member.user_id)
-        .eq("organization_id", selectedOrgId);
+    const { error } = await supabase
+      .from("user_organizations")
+      .update({ is_blocked: newValue })
+      .eq("user_id", member.user_id)
+      .eq("organization_id", member.organization_id);
 
-      if (error) {
-        console.error(error);
-        setError("Não foi possível atualizar o estado do utilizador.");
-        return;
-      }
-
-      setOrgMembers((prev) =>
-        prev.map((m) =>
-          m.user_id === member.user_id ? { ...m, is_blocked: newValue } : m
-        )
-      );
-    } finally {
-      setUpdatingMemberId(null);
+    if (error) {
+      console.error(error);
+      setError("Não foi possível atualizar o estado do utilizador.");
+      return;
     }
+
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === member.user_id ? { ...m, is_blocked: newValue } : m
+      )
+    );
   }
-
-  /** DERIVADOS **/
-
-  const selectedOrg =
-    selectedOrgId !== null
-      ? organizations.find((o) => o.id === selectedOrgId) ?? null
-      : null;
-
-  const selectedStats =
-    selectedOrgId !== null
-      ? orgStats.find((s) => s.org_id === selectedOrgId) ?? null
-      : null;
-
-  const filteredMembers =
-    memberSearch.trim().length === 0
-      ? orgMembers
-      : orgMembers.filter((m) => {
-          const name = m.profile?.nome ?? "";
-          const contacto = m.profile?.contacto ?? "";
-          const email = m.profile?.email ?? "";
-          const q = memberSearch.toLowerCase();
-          return (
-            name.toLowerCase().includes(q) ||
-            contacto.toLowerCase().includes(q) ||
-            email.toLowerCase().includes(q)
-          );
-        });
-
-  const totalAdmins = orgMembers.filter((m) => m.role === "admin").length;
-  const totalBlocked = orgMembers.filter((m) => m.is_blocked).length;
-
-  const statsUsers = selectedStats?.total_users ?? 0;
-  const statsAds = selectedStats?.total_ads ?? 0;
-  const statsAdsVendidos = selectedStats?.ads_vendidos ?? 0;
-
-  const contractedUsers =
-    selectedOrg?.contract_seats ?? selectedStats?.contract_seats ?? null;
-
-  // na barra usamos o número de membros carregados (associações) –
-  // que pode ser diferente da estatística total_users, dependendo de como a view é calculada
-  const currentUsersForBar = orgMembers.length;
-  const progress =
-    contractedUsers && contractedUsers > 0
-      ? Math.min(100, (currentUsersForBar / contractedUsers) * 100)
-      : 0;
-
-  /** RENDER **/
 
   if (!authChecked) {
     return (
-      <main style={wrapperStyle}>
+      <main style={pageWrapper}>
         <p style={{ fontSize: 14 }}>A verificar permissões…</p>
       </main>
     );
   }
 
-  if (authChecked && !isGlobalAdmin) {
+  if (!isGlobalAdmin) {
     return (
-      <main style={wrapperStyle}>
+      <main style={pageWrapper}>
         <h1 style={titleStyle}>Super painel</h1>
         <p style={subtitleStyle}>
-          O teu utilizador (<strong>{currentUserEmail ?? "sem email"}</strong>)
-          não está autorizado a aceder ao painel de super administração.
+          O teu utilizador{" "}
+          <strong>{userEmail ?? "(sem email configurado)"}</strong> não tem
+          acesso ao painel de super administração.
         </p>
       </main>
     );
   }
 
+  const selectedOrg =
+    selectedOrgId != null
+      ? orgs.find((o) => o.org.id === selectedOrgId) ?? null
+      : null;
+
   return (
-    <main style={wrapperStyle}>
+    <main style={pageWrapper}>
       <h1 style={titleStyle}>Super painel</h1>
       <p style={subtitleStyle}>
-        Gestão de organizações, contratos, utilizadores e estatísticas do
-        CampusMarket.
+        Gestão de organizações em formato de cards. Vê rapidamente os números
+        principais e ajusta os utilizadores associados.
       </p>
 
-      {/* LINHA 1: TABELA + CRIAR ORG */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 3fr) minmax(0, 1.2fr)",
-          gap: 16,
-          alignItems: "flex-start",
-        }}
-      >
-        {/* TABELA ORGANIZAÇÕES */}
-        <section style={cardStyle}>
-          <h2 style={cardTitleStyle}>Organizações</h2>
-
-          {loadingOrgs ? (
-            <p style={{ fontSize: 14 }}>A carregar organizações…</p>
-          ) : organizations.length === 0 ? (
-            <p style={{ fontSize: 14, color: "#6b7280" }}>
-              Ainda não existem organizações. Cria a primeira ao lado.
+      <div style={layoutGrid}>
+        {/* Coluna esquerda: lista de organizações */}
+        <section style={{ ...cardBase, paddingBottom: 12 }}>
+          <h2 style={cardTitle}>Organizações</h2>
+          {orgs.length === 0 ? (
+            <p style={smallText}>
+              Ainda não existem organizações configuradas.
             </p>
           ) : (
-            <div style={tableWrapper}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Organização</th>
-                    <th style={thStyle}>Tipo</th>
-                    <th style={thStyle}>Utilizadores</th>
-                    <th style={thStyle}>Anúncios</th>
-                    <th style={thStyle}>Estado</th>
-                    <th style={thStyle}>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {organizations.map((org) => {
-                    const created = org.created_at
-                      ? new Date(org.created_at).toLocaleDateString("pt-PT", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })
-                      : null;
+            <div style={orgList}>
+              {orgs.map(({ org, stats }) => {
+                const isSelected = org.id === selectedOrgId;
+                const contracted =
+                  org.contract_seats ?? stats?.contract_seats ?? null;
+                const totalUsers = stats?.total_users ?? 0;
+                const totalAds = stats?.total_ads ?? 0;
 
-                    const stats = orgStats.find((s) => s.org_id === org.id);
-                    const totalUsers = stats?.total_users ?? 0;
-                    const totalAds = stats?.total_ads ?? 0;
-                    const contracted =
-                      org.contract_seats ?? stats?.contract_seats ?? null;
-
-                    const isSelected = selectedOrgId === org.id;
-
-                    return (
-                      <tr key={org.id}>
-                        <td style={tdStyle}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedOrgId(org.id)}
-                            style={{
-                              all: "unset",
-                              cursor: "pointer",
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: "#111827",
-                            }}
-                          >
-                            {org.name ?? "(sem nome)"}
-                          </button>
-                          <div style={chipsRow}>
-                            {org.slug && (
-                              <span style={chip}>
-                                slug: <strong>{org.slug}</strong>
-                              </span>
-                            )}
-                            {created && (
-                              <span style={chip}>criada em {created}</span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td style={tdStyle}>
-                          <select
-                            value={org.tipo ?? ""}
-                            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                              handleOrgFieldChange(
-                                org.id,
-                                "tipo",
-                                e.target.value
-                              )
-                            }
-                            style={{ ...selectStyle, fontSize: 11 }}
-                          >
-                            <option value="">—</option>
-                            <option value="universidade">Universidade</option>
-                            <option value="empresa">Empresa</option>
-                          </select>
-                        </td>
-
-                        <td style={tdStyle}>
-                          <span style={chipStrong}>
-                            {totalUsers}
-                            {contracted
-                              ? ` / ${contracted} contratados`
-                              : " utilizadores"}
-                          </span>
-                        </td>
-
-                        <td style={tdStyle}>
-                          <span style={chipStrong}>{totalAds} anúncios</span>
-                        </td>
-
-                        <td style={tdStyle}>
-                          {org.is_active ? (
-                            <span style={statusBadgeActive}>Ativa</span>
-                          ) : (
-                            <span style={statusBadgeInactive}>Inativa</span>
-                          )}
-                        </td>
-
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 4,
-                            }}
-                          >
-                            <button
-                              type="button"
-                              style={secondaryButton}
-                              onClick={() => setSelectedOrgId(org.id)}
-                            >
-                              {isSelected ? "Selecionada" : "Ver detalhes"}
-                            </button>
-                            <button
-                              type="button"
-                              style={subtleButton}
-                              onClick={() => toggleOrgActive(org)}
-                            >
-                              {org.is_active ? "Inativar" : "Ativar"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                return (
+                  <button
+                    key={org.id}
+                    type="button"
+                    onClick={() => setSelectedOrgId(org.id)}
+                    style={isSelected ? orgCardSelected : orgCardBase}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "#111827",
+                        }}
+                      >
+                        {org.name ?? "(sem nome)"}
+                      </span>
+                      {org.is_active ? (
+                        <span style={statusActive}>Ativa</span>
+                      ) : (
+                        <span style={statusInactive}>Inativa</span>
+                      )}
+                    </div>
+                    <div>
+                      {org.slug && (
+                        <span style={badge}>slug: {org.slug}</span>
+                      )}
+                      {org.tipo && (
+                        <span style={badge}>
+                          {org.tipo === "empresa"
+                            ? "Empresa"
+                            : "Universidade"}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span style={badgeStrong}>
+                        {totalUsers}
+                        {contracted ? ` / ${contracted}` : ""} utilizadores
+                      </span>
+                      <span style={badgeStrong}>{totalAds} anúncios</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
-
-          {error && <p style={errorText}>{error}</p>}
-          {success && <p style={successText}>{success}</p>}
         </section>
 
-        {/* CRIAR ORGANIZAÇÃO */}
-        <section style={cardStyle}>
-          <h2 style={cardTitleStyle}>Criar nova organização</h2>
-          <p style={smallText}>
-            Define o nome, o tipo e o slug (URL) da instituição. O slug deve ser
-            único.
-          </p>
+        {/* Coluna direita: resumo + utilizadores */}
+        <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={cardBase}>
+            <h2 style={cardTitle}>Resumo da organização</h2>
 
-          <form onSubmit={handleCreateOrg}>
-            <div style={fieldStyle}>
-              <label htmlFor="org-nome" style={labelStyle}>
-                Nome da organização
-              </label>
-              <input
-                id="org-nome"
-                type="text"
-                value={orgNome}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setOrgNome(v);
-                  if (!orgSlug) setOrgSlug(gerarSlugBase(v));
-                }}
-                placeholder="Ex.: Egas Moniz, Universidade X, Empresa Y"
-                style={inputStyle}
-                required
-              />
-            </div>
-
-            <div style={fieldStyle}>
-              <label htmlFor="org-tipo" style={labelStyle}>
-                Tipo
-              </label>
-              <select
-                id="org-tipo"
-                value={orgTipo}
-                onChange={(e) =>
-                  setOrgTipo(
-                    e.target.value === "empresa" ? "empresa" : "universidade"
-                  )
-                }
-                style={selectStyle}
-              >
-                <option value="universidade">Universidade</option>
-                <option value="empresa">Empresa</option>
-              </select>
-            </div>
-
-            <div style={fieldStyle}>
-              <label htmlFor="org-slug" style={labelStyle}>
-                Slug (URL)
-              </label>
-              <input
-                id="org-slug"
-                type="text"
-                value={orgSlug}
-                onChange={(e) => setOrgSlug(e.target.value.toLowerCase())}
-                placeholder="ex: egas-moniz, universidade-x..."
-                style={inputStyle}
-                required
-              />
+            {!selectedOrg ? (
               <p style={smallText}>
-                Usado na URL e como identificador interno. Apenas letras,
-                números e hífen.
+                Seleciona uma organização na coluna ao lado.
               </p>
-            </div>
+            ) : (
+              <>
+                <h3
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 600,
+                    marginBottom: 4,
+                  }}
+                >
+                  {selectedOrg.org.name ?? "(sem nome)"}
+                </h3>
+                <p style={smallText}>
+                  {selectedOrg.org.slug && (
+                    <>
+                      <code>{selectedOrg.org.slug}</code> ·{" "}
+                    </>
+                  )}
+                  {selectedOrg.org.tipo === "empresa"
+                    ? "Empresa"
+                    : "Universidade"}
+                </p>
 
-            <div style={buttonRow}>
-              <button
-                type="submit"
-                style={creatingOrg ? primaryButtonDisabled : primaryButton}
-                disabled={creatingOrg}
-              >
-                {creatingOrg ? "A criar…" : "Criar organização"}
-              </button>
-            </div>
-          </form>
-        </section>
-      </div>
+                <div style={metricsRow}>
+                  <div style={metricCard}>
+                    <div style={metricLabel}>Utilizadores</div>
+                    <div style={metricValue}>
+                      {selectedOrg.stats?.total_users ?? 0}
+                    </div>
+                    <div style={smallText}>
+                      {selectedOrg.stats?.contract_seats
+                        ? `${selectedOrg.stats.contract_seats} contratados`
+                        : "sem limite configurado"}
+                    </div>
+                  </div>
 
-      {/* LINHA 2: DETALHES + UTILIZADORES */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 2fr)",
-          gap: 16,
-          marginTop: 16,
-          alignItems: "flex-start",
-        }}
-      >
-        {/* DETALHES / CONTRATO */}
-        <section style={cardStyle}>
-          <h2 style={cardTitleStyle}>Detalhes da organização</h2>
+                  <div style={metricCard}>
+                    <div style={metricLabel}>Anúncios</div>
+                    <div style={metricValue}>
+                      {selectedOrg.stats?.total_ads ?? 0}
+                    </div>
+                    <div style={smallText}>
+                      {selectedOrg.stats?.ads_vendidos
+                        ? `${selectedOrg.stats.ads_vendidos} vendidos`
+                        : "0 vendidos"}
+                    </div>
+                  </div>
 
-          {!selectedOrg ? (
-            <p style={smallText}>
-              Clica numa organização na tabela para veres e editares contrato,
-              contacto e limites de utilizadores.
-            </p>
-          ) : (
-            <>
-              <p style={smallText}>
-                <strong>{selectedOrg.name ?? "(sem nome)"}</strong>
-                {selectedOrg.slug && (
-                  <>
-                    {" "}
-                    · <code>{selectedOrg.slug}</code>
-                  </>
-                )}
-              </p>
-
-              {/* Resumo rápido – aqui aparecem aqueles "4 utilizadores", "12 anúncios"… */}
-              <div style={{ ...chipsRow, marginTop: 6 }}>
-                <span style={chipStrong}>{statsUsers} utilizadores</span>
-                <span style={chip}>{statsAds} anúncios</span>
-                {statsAdsVendidos > 0 && (
-                  <span style={chip}>{statsAdsVendidos} vendidos</span>
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 10,
-                  marginTop: 14,
-                }}
-              >
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Tipo de contrato</label>
-                  <input
-                    type="text"
-                    value={selectedOrg.contract_type ?? ""}
-                    onChange={(e) =>
-                      handleOrgFieldChange(
-                        selectedOrg.id,
-                        "contract_type",
-                        e.target.value
-                      )
-                    }
-                    style={inputStyle}
-                    placeholder="Ex.: anual, mensal, piloto…"
-                  />
-                </div>
-
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Utilizadores contratados</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={contractedUsers ?? ""}
-                    onChange={(e) =>
-                      handleOrgFieldChange(
-                        selectedOrg.id,
-                        "contract_seats",
-                        e.target.value
-                      )
-                    }
-                    style={inputStyle}
-                    placeholder="Ex.: 1000"
-                  />
-                </div>
-
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Valor</label>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={selectedOrg.contract_value ?? ""}
-                      onChange={(e) =>
-                        handleOrgFieldChange(
-                          selectedOrg.id,
-                          "contract_value",
-                          e.target.value
-                        )
-                      }
-                      style={{ ...inputStyle, flex: 1 }}
-                      placeholder="Ex.: 500"
-                    />
-                    <input
-                      type="text"
-                      value={selectedOrg.contract_currency ?? "EUR"}
-                      onChange={(e) =>
-                        handleOrgFieldChange(
-                          selectedOrg.id,
-                          "contract_currency",
-                          e.target.value
-                        )
-                      }
-                      style={{ ...inputStyle, width: 70 }}
-                    />
+                  <div style={metricCard}>
+                    <div style={metricLabel}>Estado</div>
+                    <div style={metricValue}>
+                      {selectedOrg.org.is_active ? "Ativa" : "Inativa"}
+                    </div>
+                    <div style={smallText}>
+                      Tipo{" "}
+                      {selectedOrg.org.tipo === "empresa"
+                        ? "empresa"
+                        : "universidade"}
+                    </div>
                   </div>
                 </div>
 
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Validade (fim)</label>
-                  <input
-                    type="date"
-                    value={
-                      selectedOrg.contract_end
-                        ? selectedOrg.contract_end.slice(0, 10)
-                        : ""
-                    }
-                    onChange={(e) =>
-                      handleOrgFieldChange(
-                        selectedOrg.id,
-                        "contract_end",
-                        e.target.value
-                      )
-                    }
-                    style={inputStyle}
-                  />
+                <div style={fieldGrid}>
+                  <div>
+                    <div style={fieldLabel}>Pessoa de contacto</div>
+                    <div style={fieldValueBox}>
+                      {selectedOrg.org.contact_name || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={fieldLabel}>Telefone</div>
+                    <div style={fieldValueBox}>
+                      {selectedOrg.org.contact_phone || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={fieldLabel}>Email</div>
+                    <div style={fieldValueBox}>
+                      {selectedOrg.org.contact_email || "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={fieldLabel}>Tipo de contrato</div>
+                    <div style={fieldValueBox}>
+                      {selectedOrg.org.contract_type || "—"}
+                    </div>
+                  </div>
                 </div>
+              </>
+            )}
+          </div>
+
+          <div style={cardBase}>
+            <h2 style={cardTitle}>Utilizadores da organização</h2>
+
+            {!selectedOrg ? (
+              <p style={smallText}>
+                Seleciona uma organização para ver os utilizadores.
+              </p>
+            ) : membersLoading ? (
+              <p style={{ fontSize: 13 }}>A carregar utilizadores…</p>
+            ) : members.length === 0 ? (
+              <p style={{ fontSize: 13, color: "#6b7280" }}>
+                Não há utilizadores associados a esta organização.
+              </p>
+            ) : (
+              <div style={tableWrapper}>
+                <table style={miniTable}>
+                  <thead>
+                    <tr>
+                      <th style={miniTh}>Nome</th>
+                      <th style={miniTh}>Email</th>
+                      <th style={miniTh}>Contacto</th>
+                      <th style={miniTh}>Perfil</th>
+                      <th style={miniTh}>Estado</th>
+                      <th style={miniTh}>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((m) => {
+                      const profile = m.profile;
+                      const name =
+                        profile?.nome ??
+                        profile?.email ??
+                        "Utilizador sem nome";
+                      const email = profile?.email ?? "Sem email";
+                      const contacto = profile?.contacto ?? "—";
+                      const role = m.role ?? "user";
+                      const blocked = !!m.is_blocked;
+
+                      return (
+                        <tr key={m.user_id}>
+                          <td style={miniTd}>{name}</td>
+                          <td style={miniTd}>{email}</td>
+                          <td style={miniTd}>{contacto}</td>
+                          <td style={miniTd}>
+                            <select
+                              value={role}
+                              onChange={(e) =>
+                                updateMemberRole(m, e.target.value)
+                              }
+                              style={selectStyle}
+                            >
+                              <option value="user">Membro</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </td>
+                          <td style={miniTd}>
+                            {blocked ? (
+                              <span style={statusInactive}>Bloqueado</span>
+                            ) : (
+                              <span style={statusActive}>Ativo</span>
+                            )}
+                          </td>
+                          <td style={miniTd}>
+                            <button
+                              type="button"
+                              style={blocked ? pillButton : pillButtonDanger}
+                              onClick={() => toggleMemberBlocked(m)}
+                            >
+                              {blocked ? "Desbloquear" : "Bloquear"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+            )}
 
-              {/* BARRA DE PROGRESSO – usa o nº de membros carregados */}
-              <div style={{ marginTop: 12 }}>
-                <label style={{ ...labelStyle, display: "block" }}>
-                  Utilização de utilizadores
-                </label>
-                <div
-                  style={{
-                    marginTop: 4,
-                    width: "100%",
-                    height: 8,
-                    borderRadius: 999,
-                    backgroundColor: "#e5e7eb",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${progress}%`,
-                      height: "100%",
-                      borderRadius: 999,
-                      backgroundColor: "#111827",
-                      transition: "width 0.2s ease-out",
-                    }}
-                  />
-                </div>
-                <p style={{ ...smallText, marginTop: 4 }}>
-                  {contractedUsers
-                    ? `${currentUsersForBar} utilizadores associados nesta lista / ${contractedUsers} contratados`
-                    : `${currentUsersForBar} utilizadores associados (nenhum limite de contrato definido)`}
-                </p>
-              </div>
-
-              <hr
-                style={{
-                  border: "none",
-                  borderTop: "1px solid #e5e7eb",
-                  margin: "12px 0",
-                }}
-              />
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: 10,
-                }}
-              >
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Pessoa de contacto</label>
-                  <input
-                    type="text"
-                    value={selectedOrg.contact_name ?? ""}
-                    onChange={(e) =>
-                      handleOrgFieldChange(
-                        selectedOrg.id,
-                        "contact_name",
-                        e.target.value
-                      )
-                    }
-                    style={inputStyle}
-                    placeholder="Nome"
-                  />
-                </div>
-
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Telefone</label>
-                  <input
-                    type="tel"
-                    value={selectedOrg.contact_phone ?? ""}
-                    onChange={(e) =>
-                      handleOrgFieldChange(
-                        selectedOrg.id,
-                        "contact_phone",
-                        e.target.value
-                      )
-                    }
-                    style={inputStyle}
-                    placeholder="Telefone"
-                  />
-                </div>
-
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Email</label>
-                  <input
-                    type="email"
-                    value={selectedOrg.contact_email ?? ""}
-                    onChange={(e) =>
-                      handleOrgFieldChange(
-                        selectedOrg.id,
-                        "contact_email",
-                        e.target.value
-                      )
-                    }
-                    style={inputStyle}
-                    placeholder="Email"
-                  />
-                </div>
-
-                <div style={fieldStyle}>
-                  <label style={labelStyle}>Notas internas</label>
-                  <textarea
-                    value={selectedOrg.contract_notes ?? ""}
-                    onChange={(e) =>
-                      handleOrgFieldChange(
-                        selectedOrg.id,
-                        "contract_notes",
-                        e.target.value
-                      )
-                    }
-                    style={textareaStyle}
-                    placeholder="Observações sobre o contrato, upgrades, renegociações…"
-                  />
-                </div>
-              </div>
-
-              {/* MÓDULOS DA PLATAFORMA */}
-              <hr
-                style={{
-                  border: "none",
-                  borderTop: "1px solid #e5e7eb",
-                  margin: "12px 0",
-                }}
-              />
-
-              <div>
-                <label style={labelStyle}>Módulos ativos</label>
-                <div style={modulesRowStyle}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      toggleOrgModule(selectedOrg.id, "module_esg_premium")
-                    }
-                    style={
-                      selectedOrg.module_esg_premium
-                        ? modulePillActive
-                        : modulePillBase
-                    }
-                  >
-                    ESG &amp; relatórios avançados
-                  </button>
-                </div>
-                <p style={smallText}>
-                  Quando o módulo está cinzento, a organização não vê essas
-                  funcionalidades. Quando está verde, fica disponível para os
-                  admins dessa conta.
-                </p>
-              </div>
-
-              <div style={buttonRow}>
-                <button
-                  type="button"
-                  style={
-                    savingOrgId === selectedOrg.id
-                      ? primaryButtonDisabled
-                      : primaryButton
-                  }
-                  disabled={savingOrgId === selectedOrg.id}
-                  onClick={() => handleSaveOrg(selectedOrg)}
-                >
-                  {savingOrgId === selectedOrg.id
-                    ? "A guardar…"
-                    : "Guardar alterações"}
-                </button>
-              </div>
-            </>
-          )}
-        </section>
-
-        {/* UTILIZADORES */}
-        <section style={cardStyle}>
-          <h2 style={cardTitleStyle}>Utilizadores da organização</h2>
-
-          {!selectedOrg ? (
-            <p style={smallText}>
-              Seleciona uma organização na tabela para gerir os utilizadores,
-              admins e bloqueios.
-            </p>
-          ) : (
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 8,
-                  gap: 8,
-                }}
-              >
-                <p style={smallText}>
-                  Total na lista: <strong>{orgMembers.length}</strong> · Admins:{" "}
-                  <strong>{totalAdmins}</strong> · Bloqueados:{" "}
-                  <strong>{totalBlocked}</strong>
-                  {statsUsers > 0 && (
-                    <>
-                      {" "}
-                      · Estatística:{" "}
-                      <strong>{statsUsers} utilizadores</strong>
-                    </>
-                  )}
-                </p>
-                <input
-                  type="text"
-                  value={memberSearch}
-                  onChange={(e) => setMemberSearch(e.target.value)}
-                  style={{ ...inputStyle, maxWidth: 260 }}
-                  placeholder="Pesquisar nome, email ou contacto…"
-                />
-              </div>
-
-              {membersLoading ? (
-                <p style={{ fontSize: 13 }}>A carregar utilizadores…</p>
-              ) : filteredMembers.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#6b7280" }}>
-                  Nenhum utilizador associado a esta organização.
-                </p>
-              ) : (
-                <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                  <table style={miniTableStyle}>
-                    <thead>
-                      <tr>
-                        <th style={miniThStyle}>Nome</th>
-                        <th style={miniThStyle}>Email</th>
-                        <th style={miniThStyle}>Contacto</th>
-                        <th style={miniThStyle}>Perfil</th>
-                        <th style={miniThStyle}>Estado</th>
-                        <th style={miniThStyle}>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredMembers.map((m) => {
-                        const name = m.profile?.nome ?? "Sem nome";
-                        const email = m.profile?.email ?? "Sem email";
-                        const contacto = m.profile?.contacto ?? "—";
-                        const role = m.role ?? "user";
-                        const blocked = !!m.is_blocked;
-
-                        return (
-                          <tr key={m.user_id}>
-                            <td style={miniTdStyle}>{name}</td>
-                            <td style={miniTdStyle}>{email}</td>
-                            <td style={miniTdStyle}>{contacto}</td>
-                            <td style={miniTdStyle}>
-                              <select
-                                value={role}
-                                onChange={(e) =>
-                                  handleMemberRoleChange(m, e.target.value)
-                                }
-                                style={{
-                                  ...selectStyle,
-                                  fontSize: 11,
-                                  padding: "4px 6px",
-                                }}
-                                disabled={updatingMemberId === m.user_id}
-                              >
-                                <option value="user">Membro</option>
-                                <option value="admin">Admin</option>
-                              </select>
-                            </td>
-                            <td style={miniTdStyle}>
-                              {blocked ? (
-                                <span style={statusBadgeInactive}>
-                                  Bloqueado
-                                </span>
-                              ) : (
-                                <span style={statusBadgeActive}>Ativo</span>
-                              )}
-                            </td>
-                            <td style={miniTdStyle}>
-                              <button
-                                type="button"
-                                style={secondaryButton}
-                                onClick={() => toggleMemberBlocked(m)}
-                                disabled={updatingMemberId === m.user_id}
-                              >
-                                {blocked ? "Desbloquear" : "Bloquear"}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
+            {error && <p style={errorText}>{error}</p>}
+          </div>
         </section>
       </div>
     </main>
